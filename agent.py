@@ -8,7 +8,7 @@ Usage:
     python -m tools.patch preview .agent/patch.json  # standalone patch preview
 """
 
-import json, os, re, sys, io, time
+import json, os, re, sys, io, time, subprocess
 from tools import fs, phases
 from tools.patch import preview, apply
 
@@ -38,6 +38,29 @@ def _save_metrics(slug: str, metrics: dict) -> str:
         json.dump(metrics, f, indent=2, ensure_ascii=False)
     return path
 
+def _run_git_command(command):
+    """Executes a git command and prints its output."""
+    try:
+        result = subprocess.run(
+            ['git'] + command,
+            check=True,
+            capture_output=True,
+            text=True,
+            encoding='utf-8'
+        )
+        if result.stdout:
+            print(result.stdout.strip())
+        if result.stderr:
+            print(result.stderr.strip(), file=sys.stderr)
+        return True
+    except subprocess.CalledProcessError as e:
+        print(f"Error executing git command: {' '.join(['git'] + command)}")
+        print(f"Stderr: {e.stderr.strip()}")
+        return False
+    except FileNotFoundError:
+        print("Error: 'git' command not found. Is git installed and in your PATH?")
+        return False
+
 def run_once(request: str, history: str, auto_apply=False) -> str:
     start_run_time = time.time()
 
@@ -52,10 +75,10 @@ def run_once(request: str, history: str, auto_apply=False) -> str:
     log_entries.append(f"Request: {request}\n")
 
     try:
-        readme = fs.read_readme()
+        protocol = fs.read_protocol()
 
         print("\n🔎 Step 1: Exploring folders...")
-        folders = phases.explore_folders(request, readme, history, tracer=metrics)
+        folders = phases.explore_folders(request, protocol, history, tracer=metrics)
         print(f"📂 Folders to inspect: {', '.join(folders) if folders else 'none'}")
         print(f"✨ Tokens used so far: {metrics.get('llm_total_tokens', 0)}")
 
@@ -77,7 +100,7 @@ def run_once(request: str, history: str, auto_apply=False) -> str:
             context = phases.build_context(files)
 
             print("\n💡 Step 5: Generating solution...")
-            current_run_history = history
+            current_run_history = "" # Start with a clean slate for solve phase
             MAX_RETRIES = 3
             final_status = "error"
             patch_path = None
@@ -104,13 +127,28 @@ def run_once(request: str, history: str, auto_apply=False) -> str:
 
                 if user_choice == 'apply':
                     ok = apply(patch_path)
-                    final_status = "applied" if ok else "applied with errors"
+                    if ok:
+                        print("\nCommitting changes...")
+                        files_to_add = list(set([change['file'] for change in solution.model_dump()['changes']]))
+                        _run_git_command(['add'] + files_to_add)
+
+                        commit_message = f"feat: {request}"
+                        if len(commit_message) > 72:
+                           commit_message = commit_message[:69] + "..."
+
+                        _run_git_command(['commit', '-m', commit_message])
+                        final_status = "applied and committed"
+                    else:
+                        final_status = "applied with errors"
                     break
                 elif user_choice == 'skip':
                     final_status = "skipped"
                     break
-                elif user_choice == 'retry' and not auto_apply:
+                elif user_choice == 'iterate' and not auto_apply:
                     if attempt < MAX_RETRIES - 1:
+                        print("\nDiscarding proposed changes...")
+                        _run_git_command(['restore', '.']) # Reset any stray modifications
+
                         feedback = input("\n📝 Please describe the issue with the patch to help me improve it: ").strip()
                         if not feedback:
                             print("No feedback provided. Skipping changes.")
@@ -131,7 +169,7 @@ def run_once(request: str, history: str, auto_apply=False) -> str:
                         print("\n❌ Maximum number of retries reached.")
                         final_status = "skipped (max retries)"
                         break
-                else: # Fallback or auto_apply with retry (which we block)
+                else: # Fallback or auto_apply with iterate (which we block)
                     final_status = "skipped"
                     break
             else: # This 'else' on the for loop is for when the loop finishes without `break`.
@@ -154,6 +192,16 @@ def run_once(request: str, history: str, auto_apply=False) -> str:
         metrics['end_timestamp'] = end_run_time
         metrics['total_run_duration'] = end_run_time - start_run_time
         metrics['result_message'] = result_message # Add final message to metrics
+
+        # Add prompts to log
+        if metrics.get('prompts'):
+            log_entries.append("\n\n--- Prompts Used ---")
+            for phase, prompt_list in metrics['prompts'].items():
+                for i, prompt_content in enumerate(prompt_list):
+                    log_entries.append(f"\n--- Prompt for '{phase}' (call #{i+1}) ---")
+                    log_entries.append(prompt_content)
+                    log_entries.append(f"--- End Prompt for '{phase}' (call #{i+1}) ---")
+            log_entries.append("--------------------​")
 
         # Format and append KPIs to log_entries and print
         kpi_lines = [

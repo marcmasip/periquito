@@ -34,6 +34,14 @@ def generate_json(prompt: str, pydantic_model: BaseModel, tracer: dict = None, m
     Generates a response from the LLM in JSON format and parses it using a Pydantic model.
     """
     print(f"  Making LLM call for '{phase_name}' using model '{model_name}'...", file=sys.stderr)
+
+    if tracer is not None:
+        if 'prompts' not in tracer:
+            tracer['prompts'] = {}
+        if phase_name not in tracer['prompts']:
+            tracer['prompts'][phase_name] = []
+        tracer['prompts'][phase_name].append(prompt)
+
     model = genai.GenerativeModel(
         model_name,
         generation_config={"response_mime_type": "application/json"},
