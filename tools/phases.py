@@ -23,16 +23,14 @@ class Solution(BaseModel):
 # --- Prompts ---
 
 EXPLORE_PROMPT = """
-Based on the user's request and the project's README, identify the most relevant folders to inspect for solving the task.
-The goal is to narrow down the search space. List the folder paths that likely contain the necessary code.
-You can also list specific files if they are mentioned or obvious.
-Include './' if you need to inspect files in the root directory.
+Based on the user's request, select the most relevant source paths from the list below to solve the task.
+Your response must be a selection of paths from the 'Project Structure Summary'. Do not invent paths or use './' unless it is explicitly listed.
 
 User Request: {request}
 
-README.md:
+Project Structure Summary:
 ---
-{readme}
+{protocol}
 ---
 
 History of previous interactions:
@@ -63,7 +61,7 @@ Respond with a JSON object containing a 'files' key with a list of file paths.
 """
 
 SOLVE_PROMPT = """
-You are a senior software engineer. Your task is to solve the user's request based on the provided context.
+You are a Senior proeficient software engineer. Your task is to solve the user's request based on the provided context.
 Provide a detailed explanation of your solution and a code patch in JSON format.
 The JSON patch should contain a list of changes, each with 'file', 'search', and 'replace' keys.
 'search' must be an exact match of the code to be replaced. If it's a new file, 'search' should be an empty string.
@@ -86,9 +84,9 @@ Respond with a single JSON object containing 'explanation' and 'changes'.
 
 # --- Phases ---
 
-def explore_folders(request: str, readme: str, history: str, tracer: dict = None) -> List[str]:
+def explore_folders(request: str, protocol: str, history: str, tracer: dict = None) -> List[str]:
     start_time = time.time()
-    prompt = EXPLORE_PROMPT.format(request=request, readme=readme, history=history or 'None')
+    prompt = EXPLORE_PROMPT.format(request=request, protocol=protocol, history=history or 'None')
     result = llm.generate_json(prompt, FolderList, tracer=tracer, phase_name="explore_folders", model_name=llm.MODEL_NAME_DEFAULT)
     end_time = time.time()
     if tracer is not None:
