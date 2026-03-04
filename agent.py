@@ -77,29 +77,27 @@ def run_once(request: str, history: str, auto_apply=False) -> str:
     try:
         protocol = fs.read_protocol()
 
-        print("\n🔎 Step 1: Exploring folders...")
+        print("\n1. Exploring folders...")
         folders = phases.explore_folders(request, protocol, history, tracer=metrics)
-        print(f"📂 Folders to inspect: {', '.join(folders) if folders else 'none'}")
-        print(f"✨ Tokens used so far: {metrics.get('llm_total_tokens', 0)}")
+        print(f"  > Folders: {', '.join(folders) if folders else 'none'}")
+        print(f"  > Total tokens used: {metrics.get('llm_total_tokens', 0)}")
 
-        print("\n🌳 Step 2: Building file tree for selected folders...")
+        print("\n2. Building file tree...")
         file_tree = fs.build_tree(folders)
-        print("File tree:\n---")
-        print(file_tree)
-        print("---\n")
+        print(f"---\n{file_tree}\n---")
 
-        print("📄 Step 3: Selecting specific files to read...")
+        print("\n3. Selecting files...")
         files = phases.select_files(request, file_tree, history, tracer=metrics)
-        print(f"📝 Files to read: {', '.join(files) if files else 'none'}")
-        print(f"✨ Tokens used so far: {metrics.get('llm_total_tokens', 0)}")
+        print(f"  > Files: {', '.join(files) if files else 'none'}")
+        print(f"  > Total tokens used: {metrics.get('llm_total_tokens', 0)}")
         if not files:
             print("No files selected. Cannot proceed.")
             result_message = f"Request: '{request}' | status: skipped (no files selected)"
         else:
-            print("\n📚 Step 4: Building context from selected files...")
+            print("\n4. Reading files...")
             context = phases.build_context(files)
 
-            print("\n💡 Step 5: Generating solution...")
+            print("\n5. Generating solution...")
             current_run_history = "" # Start with a clean slate for solve phase
             MAX_RETRIES = 3
             final_status = "error"
@@ -107,28 +105,26 @@ def run_once(request: str, history: str, auto_apply=False) -> str:
 
             for attempt in range(MAX_RETRIES):
                 if attempt > 0:
-                    print(f"\n🔄 Retrying generation (Attempt {attempt + 1}/{MAX_RETRIES})...")
+                    print(f"\n  > Retrying... (Attempt {attempt + 1}/{MAX_RETRIES})")
 
                 solution = phases.solve(request, context, current_run_history, tracer=metrics)
-                print(f"✨ Tokens used so far: {metrics.get('llm_total_tokens', 0)}")
+                print(f"  > Total tokens used: {metrics.get('llm_total_tokens', 0)}")
 
                 if not solution.changes:
-                    print("\n--- Agent's Response ---")
-                    print(solution.explanation)
-                    print("------------------------")
+                    print(f"\n---\n{solution.explanation}\n---")
                     final_status = "completed (explanation only)"
                     patch_path = None # Ensure patch_path is None
                     break # Exit the retry loop for explanation-only responses
 
                 patch_path = _save_patch(slug, solution)
-                print(f"\n💾 Patch saved → {patch_path}")
+                print(f"\n  > Patch saved: {patch_path}")
 
                 user_choice = 'apply' if auto_apply else preview(patch_path)
 
                 if user_choice == 'apply':
                     ok = apply(patch_path)
                     if ok:
-                        print("\nCommitting changes...")
+                        print("  > Committing changes...")
                         files_to_add = list(set([change['file'] for change in solution.model_dump()['changes']]))
                         _run_git_command(['add'] + files_to_add)
 
@@ -223,10 +219,10 @@ def run_once(request: str, history: str, auto_apply=False) -> str:
         _save_log(slug, log_content)
 
         print("\n".join(kpi_lines))
-        print(f"📝 Session finish") # This message goes to the original stdout
-        print(f"📝 Raw interaction log saved → {AGENT_DIR}/{slug}.txt")
+        print(f"\n> Session finished.")
+        print(f"> Log:   {AGENT_DIR}/{slug}.txt")
         _save_metrics(slug, metrics)
-        print(f"📝 Metrics saved → {AGENT_DIR}/{slug}_metrics.json")
+        print(f"> Metrics: {AGENT_DIR}/{slug}_metrics.json")
 
     return result_message
 

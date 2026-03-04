@@ -18,14 +18,11 @@ except KeyError:
 MODEL_NAME_DEFAULT = "gemini-2.5-flash"
 MODEL_NAME_ADVANCED = "gemini-2.5-pro"
 
-def _log_llm_progress(phase_name: str, duration: float, prompt_tokens: int, candidates_tokens: int, total_tokens: int):
+def _log_llm_progress(phase_name: str, model_name: str, duration: float, prompt_tokens: int, candidates_tokens: int, total_tokens: int):
     """Logs LLM call details to stderr."""
+    # Example: LLM call for 'solve' (gemini-2.5-pro) took 5.23s, 2450 tokens.
     print(
-        f"  [LLM Call for {phase_name}] "
-        f"Duration: {duration:.2f}s | "
-        f"Prompt Tokens: {prompt_tokens} | "
-        f"Candidate Tokens: {candidates_tokens} | "
-        f"Total Tokens: {total_tokens}",
+        f"  LLM call for '{phase_name}' ({model_name}) took {duration:.2f}s, {total_tokens} tokens.",
         file=sys.stderr
     )
 
@@ -33,7 +30,6 @@ def generate_json(prompt: str, pydantic_model: BaseModel, tracer: dict = None, m
     """
     Generates a response from the LLM in JSON format and parses it using a Pydantic model.
     """
-    print(f"  Making LLM call for '{phase_name}' using model '{model_name}'...", file=sys.stderr)
 
     if tracer is not None:
         if 'prompts' not in tracer:
@@ -63,7 +59,7 @@ def generate_json(prompt: str, pydantic_model: BaseModel, tracer: dict = None, m
             candidates_tokens = response.usage_metadata.candidates_token_count
             total_tokens = prompt_tokens + candidates_tokens
 
-            _log_llm_progress(phase_name, duration, prompt_tokens, candidates_tokens, total_tokens)
+            _log_llm_progress(phase_name, model_name, duration, prompt_tokens, candidates_tokens, total_tokens)
 
             if tracer is not None:
                 tracer['llm_calls_count'] = tracer.get('llm_calls_count', 0) + 1
@@ -72,7 +68,7 @@ def generate_json(prompt: str, pydantic_model: BaseModel, tracer: dict = None, m
                 tracer['llm_total_candidates_tokens'] = tracer.get('llm_total_candidates_tokens', 0) + candidates_tokens
                 tracer['llm_total_tokens'] = tracer.get('llm_total_tokens', 0) + total_tokens
         else:
-            print(f"  [LLM Call for {phase_name}] No usage metadata available. Duration: {duration:.2f}s", file=sys.stderr)
+            print(f"  LLM call for '{phase_name}' ({model_name}) took {duration:.2f}s (no token usage metadata).", file=sys.stderr)
             if tracer is not None:
                 tracer['llm_calls_count'] = tracer.get('llm_calls_count', 0) + 1
                 tracer['llm_total_duration'] = tracer.get('llm_total_duration', 0.0) + duration

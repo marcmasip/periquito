@@ -1,5 +1,6 @@
 import os
 import pathspec
+import re
 
 def read_file(path: str) -> str:
     try:
@@ -14,6 +15,25 @@ def read_readme() -> str:
             return read_file(name)
     return "No README file found."
 
+def read_protocol() -> str:
+    """
+    Reads the README.md file and extracts the content under the
+    '### Project Structure' heading. If not found, returns the full README.
+    """
+    readme_content = read_readme()
+    if "No README file found." in readme_content:
+        return readme_content
+
+    # Use regex to find content between '### Project Structure' or '### Source' and the next heading or end of file.
+    match = re.search(r'### (?:Project Structure|Source)\s*\n(.*?)(?=\n#{1,3} |\Z)', readme_content, re.DOTALL | re.IGNORECASE)
+
+    if match and match.group(1).strip():
+        protocol_content = match.group(1).strip()
+        return f"The following is a summary of the project structure to guide folder exploration:\n\n---\n{protocol_content}\n---"
+    else:
+        # If section not found or empty, return the full README as a fallback.
+        return readme_content
+
 def get_gitignore_spec() -> pathspec.PathSpec:
     patterns = []
     if os.path.exists('.gitignore'):
@@ -24,7 +44,7 @@ def get_gitignore_spec() -> pathspec.PathSpec:
 
 def build_tree(folders: list[str]) -> str:
     if not folders:
-        folders = ['.'] # Default to current directory if no folders are specified
+        return "" # Return empty string if no folders are specified
 
     spec = get_gitignore_spec()
     tree_lines = []
@@ -67,6 +87,6 @@ def read_files_as_context(filenames: list[str]) -> str:
         content = read_file(filename)
         if content:
             line_count = len(content.splitlines())
-            print(f"    - Added '{filename}' ({line_count} lines)")
+            print(f"  - Reading '{filename}' ({line_count} lines)")
             context.append(f"--- FILE: {filename} ({line_count} lines)---\n{content}")
     return "\n\n".join(context)
