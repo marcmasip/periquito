@@ -100,6 +100,5 @@ def read_files_as_context(filenames: list[str]) -> str:
         content = read_file(filename)
         if content:
             line_count = len(content.splitlines())
-            print(f"  - Reading '{filename}' ({line_count} lines)")
             context.append(f"--- FILE: {filename} ({line_count} lines)---\n{content}")
     return "\n\n".join(context)

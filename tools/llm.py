@@ -19,11 +19,11 @@ MODEL_NAME_DEFAULT = "gemini-2.5-flash"
 MODEL_NAME_ADVANCED = "gemini-2.5-pro"
 
 def _log_llm_progress(phase_name: str, model_name: str, duration: float, prompt_tokens: int, candidates_tokens: int, total_tokens: int):
-    """Logs LLM call details to stderr."""
-    # Example: LLM call for 'solve' (gemini-2.5-pro) took 5.23s, 2450 tokens.
+    """Logs LLM call details to stdout."""
+    # Example:   > LLM 'solve' (gemini-1.5-pro): 5.23s, 2450 tokens
     print(
-        f"  LLM call for '{phase_name}' ({model_name}) took {duration:.2f}s, {total_tokens} tokens.",
-        file=sys.stderr
+        f"  > LLM '{phase_name}' ({model_name}): {duration:.2f}s, {total_tokens} tokens",
+        file=sys.stdout
     )
 
 def generate_json(prompt: str, pydantic_model: BaseModel, tracer: dict = None, model_name: str = MODEL_NAME_DEFAULT, phase_name: str = "Unknown") -> BaseModel:
@@ -68,7 +68,7 @@ def generate_json(prompt: str, pydantic_model: BaseModel, tracer: dict = None, m
                 tracer['llm_total_candidates_tokens'] = tracer.get('llm_total_candidates_tokens', 0) + candidates_tokens
                 tracer['llm_total_tokens'] = tracer.get('llm_total_tokens', 0) + total_tokens
         else:
-            print(f"  LLM call for '{phase_name}' ({model_name}) took {duration:.2f}s (no token usage metadata).", file=sys.stderr)
+            print(f"  > LLM '{phase_name}' ({model_name}): {duration:.2f}s (no token usage metadata)", file=sys.stdout)
             if tracer is not None:
                 tracer['llm_calls_count'] = tracer.get('llm_calls_count', 0) + 1
                 tracer['llm_total_duration'] = tracer.get('llm_total_duration', 0.0) + duration

@@ -77,27 +77,27 @@ def run_once(request: str, history: str, auto_apply=False) -> str:
     try:
         protocol = fs.read_protocol()
 
-        print("\n1. Exploring folders...")
+        print("\n1. 🗺️  Exploring folders...")
         folders = phases.explore_folders(request, protocol, history, tracer=metrics)
-        print(f"  > Folders: {', '.join(folders) if folders else 'none'}")
-        print(f"  > Total tokens used: {metrics.get('llm_total_tokens', 0)}")
+        print(f"  > Selected: {', '.join(folders) if folders else 'none'}")
 
-        print("\n2. Building file tree...")
+        print("\n2. 🌳 Building file tree...")
         file_tree = fs.build_tree(folders)
         print(f"---\n{file_tree}\n---")
 
-        print("\n3. Selecting files...")
+        print("\n3. 🎯 Selecting files...")
         files = phases.select_files(request, file_tree, history, tracer=metrics)
-        print(f"  > Files: {', '.join(files) if files else 'none'}")
-        print(f"  > Total tokens used: {metrics.get('llm_total_tokens', 0)}")
+        print(f"  > Selected: {', '.join(files) if files else 'none'}")
         if not files:
-            print("No files selected. Cannot proceed.")
+            print("  > No files selected. Cannot proceed.")
             result_message = f"Request: '{request}' | status: skipped (no files selected)"
         else:
-            print("\n4. Reading files...")
+            print("\n4. 📖 Reading files...")
             context = phases.build_context(files)
+            lines_read = sum(int(c) for c in re.findall(r'\((\d+) lines\)', context))
+            print(f"  > Read {len(files)} files ({lines_read} lines) into context.")
 
-            print("\n5. Generating solution...")
+            print("\n5. 🧠 Generating solution...")
             current_run_history = "" # Start with a clean slate for solve phase
             MAX_RETRIES = 3
             final_status = "error"
@@ -105,10 +105,9 @@ def run_once(request: str, history: str, auto_apply=False) -> str:
 
             for attempt in range(MAX_RETRIES):
                 if attempt > 0:
-                    print(f"\n  > Retrying... (Attempt {attempt + 1}/{MAX_RETRIES})")
+                    print(f"\n  > Retrying solution... (Attempt {attempt + 1}/{MAX_RETRIES})")
 
                 solution = phases.solve(request, context, current_run_history, tracer=metrics)
-                print(f"  > Total tokens used: {metrics.get('llm_total_tokens', 0)}")
 
                 if not solution.changes:
                     print(f"\n---\n{solution.explanation}\n---")
@@ -124,7 +123,7 @@ def run_once(request: str, history: str, auto_apply=False) -> str:
                 if user_choice == 'apply':
                     ok = apply(patch_path)
                     if ok:
-                        print("  > Committing changes...")
+                        print("  > Committing changes via git...")
                         files_to_add = list(set([change['file'] for change in solution.model_dump()['changes']]))
                         _run_git_command(['add'] + files_to_add)
 
@@ -216,13 +215,13 @@ def run_once(request: str, history: str, auto_apply=False) -> str:
         log_entries.extend(kpi_lines)
         log_entries.append(f"Result message: {result_message}")
         log_content = "\n".join(log_entries)
-        _save_log(slug, log_content)
+        log_path = _save_log(slug, log_content)
+        metrics_path = _save_metrics(slug, metrics)
 
         print("\n".join(kpi_lines))
-        print(f"\n> Session finished.")
-        print(f"> Log:   {AGENT_DIR}/{slug}.txt")
-        _save_metrics(slug, metrics)
-        print(f"> Metrics: {AGENT_DIR}/{slug}_metrics.json")
+        print(f"\n🏁 Session finished.")
+        print(f"  > Log:     {log_path}")
+        print(f"  > Metrics: {metrics_path}")
 
     return result_message
 
