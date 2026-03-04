@@ -23,8 +23,9 @@ class Solution(BaseModel):
 # --- Prompts ---
 
 EXPLORE_PROMPT = """
-Based on the user's request, select the most relevant source paths from the list below to solve the task.
-Your response must be a selection of paths from the 'Project Structure Summary'. Do not invent paths or use './' unless it is explicitly listed.
+Your goal is to identify the most relevant folders to inspect based on the user's request and a summary of the project structure.
+This helps to focus the search and avoid analyzing the entire project. Pay attention to documentation files like READMEs if they are listed.
+Your response must be a selection of paths from the 'Project Structure Summary' below. Do not invent paths.
 
 User Request: {request}
 
@@ -38,16 +39,16 @@ History of previous interactions:
 {history}
 ---
 
-Respond with a JSON object containing a 'folders' key with a list of paths.
+Respond with a JSON object containing a 'folders' key with a list of folder paths.
 """
 
 SELECT_PROMPT = """
-Based on the user's request and the file tree of relevant folders, select the specific files needed to generate a solution.
-Focus on the files that you will need to read to understand the code and propose changes.
+From the file tree of the relevant folders selected previously, your task is to pinpoint the exact files needed to solve the user's request.
+Select the minimum set of files required to read and understand the existing code before proposing changes.
 
 User Request: {request}
 
-File Tree:
+File Tree of Relevant Folders:
 ---
 {file_tree}
 ---
@@ -61,7 +62,7 @@ Respond with a JSON object containing a 'files' key with a list of file paths.
 """
 
 SOLVE_PROMPT = """
-You are a Senior proeficient software engineer. Your task is to solve the user's request based on the provided context.
+You are a Senior proficient software engineer. Your task is to solve the user's request based on the provided context.
 Provide a detailed explanation of your solution and a code patch in JSON format.
 The JSON patch should contain a list of changes, each with 'file', 'search', and 'replace' keys.
 'search' must be an exact match of the code to be replaced. If it's a new file, 'search' should be an empty string.
