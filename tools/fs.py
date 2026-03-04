@@ -18,21 +18,34 @@ def read_readme() -> str:
 def read_protocol() -> str:
     """
     Reads the README.md file and extracts the content under the
-    '### Project Structure' heading. If not found, returns the full README.
+    '### Project Structure' heading. If not found or empty, generates
+    a root-level file listing of the project as a fallback.
     """
     readme_content = read_readme()
-    if "No README file found." in readme_content:
-        return readme_content
+    protocol_content = ""
 
-    # Use regex to find content between '### Project Structure' or '### Source' and the next heading or end of file.
-    match = re.search(r'### (?:Project Structure|Source)\s*\n(.*?)(?=\n#{1,3} |\Z)', readme_content, re.DOTALL | re.IGNORECASE)
+    if "No README file found." not in readme_content:
+        # Use regex to find content between '### Project Structure' or '### Source' and the next heading or end of file.
+        match = re.search(r'### (?:Project Structure|Source)\s*\n(.*?)(?=\n#{1,3} |\Z)', readme_content, re.DOTALL | re.IGNORECASE)
+        if match and match.group(1).strip():
+            protocol_content = match.group(1).strip()
 
-    if match and match.group(1).strip():
-        protocol_content = match.group(1).strip()
+    if protocol_content:
         return f"The following is a summary of the project structure to guide folder exploration:\n\n---\n{protocol_content}\n---"
-    else:
-        # If section not found or empty, return the full README as a fallback.
-        return readme_content
+    
+    # Fallback to root directory listing
+    spec = get_gitignore_spec()
+    lines = []
+    for item in sorted(os.listdir('.')):
+        if spec.match_file(item):
+            continue
+        if os.path.isdir(item):
+            lines.append(f"{item}/")
+        else:
+            lines.append(item)
+    
+    summary = "\n".join(lines)
+    return f"No 'Project Structure' section found in README. Using a file listing summary to guide folder exploration:\n\n---\n{summary}\n---"
 
 def get_gitignore_spec() -> pathspec.PathSpec:
     patterns = []
