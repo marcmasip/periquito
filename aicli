@@ -6,12 +6,21 @@
 
 set -e # Exit immediately if a command exits with a non-zero status.
 
-# Get the absolute path of the directory where this script is located.
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# Get the absolute path of the directory where this script is located,
+# resolving any symlinks.
+SOURCE="${BASH_SOURCE[0]}"
+while [ -h "$SOURCE" ]; do # resolve $SOURCE until the file is no longer a symlink
+  DIR="$( cd -P "$( dirname "$SOURCE" )" >/dev/null 2>&1 && pwd )"
+  SOURCE="$(readlink "$SOURCE")"
+  # if $SOURCE was a relative symlink, resolve it relative to the path
+  # where the symlink file was located.
+  [[ $SOURCE != /* ]] && SOURCE="$DIR/$SOURCE"
+done
+SCRIPT_DIR="$( cd -P "$( dirname "$SOURCE" )" >/dev/null 2>&1 && pwd )"
 
 # Define the path to the main Python application script.
 # Assumes the main script is located at 'src/main.py'.
-MAIN_PY_PATH="$SCRIPT_DIR/src/main.py"
+MAIN_PY_PATH="$SCRIPT_DIR/agent.py"
 
 # Check if the main Python script exists.
 if [ ! -f "$MAIN_PY_PATH" ]; then
