@@ -2,6 +2,7 @@ import os
 import json
 import time
 import sys
+import threading
 from google import genai
 from google.genai import types
 from pydantic import BaseModel
@@ -53,14 +54,20 @@ def generate_json(prompt: str, pydantic_model: type[BaseModel], tracer: dict = N
     start_time = time.time()
     try:
         # 3. Llamada mediante client.models
-		printer.sub_info(f"  > LLM '{phase_name}' ({Ansi.YELLOW}{model_name}{Ansi.RESET}) ...")
-		
-		
-        response = client.models.generate_content(
-            model=model_name,
-            contents=prompt,
-            config=config
-        )
+        stop_event = threading.Event()
+        progress_thread = threading.Thread(target=printer.progress_bar_runner, args=(stop_event,))
+        progress_thread.start()
+
+        try:
+            response = client.models.generate_content(
+                model=model_name,
+                contents=prompt,
+                config=config
+            )
+        finally:
+            stop_event.set()
+            progress_thread.join()
+
         end_time = time.time()
         duration = end_time - start_time
 

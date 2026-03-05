@@ -1,4 +1,6 @@
 import sys
+import time
+from threading import Event
 
 # ANSI escape codes for colors
 class Ansi:
@@ -58,6 +60,33 @@ def error(message: str, **kwargs):
 def ask(prompt: str) -> str:
     """Prints a prompt for user input and returns the response."""
     return input(f"👉 {Ansi.CYAN}{prompt}{Ansi.RESET}").strip()
+
+def progress_bar_runner(stop_event: Event, width: int = 40, duration: int = 60):
+    """
+    Displays and updates a progress bar that loops.
+    To be run in a separate thread.
+    """
+    spinners = ['/', '-', '\\', '|']
+    i = 0
+    start_time = time.time()
+    while not stop_event.is_set():
+        elapsed = (time.time() - start_time)
+        progress = (elapsed % duration) / duration
+        
+        filled_length = int(width * progress)
+        bar = '█' * filled_length + '-' * (width - filled_length)
+        
+        spinner = spinners[i % len(spinners)]
+        i += 1
+        
+        sys.stdout.write(f"\r  > Pensando... {spinner} [{bar}]")
+        sys.stdout.flush()
+        
+        time.sleep(0.1)
+    
+    # Clear the progress bar line
+    sys.stdout.write('\r' + ' ' * (width + 20) + '\r')
+    sys.stdout.flush()
 
 def panel(content: str, title: str = "", border_color: str = Ansi.BRIGHT_BLACK, **kwargs):
     """Prints content inside a colored panel."""
