@@ -1,6 +1,7 @@
-# Periquito Agent
+# 🦖 Periquito Agent
 
-A minimalist, command-line AI coding agent. It analyzes a codebase, understands requests, and generates reviewable code patches.
+A minimalist, command-line Gemini AI coding agent. 
+It analyzes a codebase, understands requests, and generates reviewable code patches.
 
 ## Usage
 
@@ -18,7 +19,7 @@ python src/agent.py "Your coding request here"
 
 The agent's effectiveness relies on understanding the project structure. It uses the `README.md` for a high-level description and a list of key folders to start its analysis.
 
-For best results, your project `README.md` should contain a concise description and a `## Project Structure` section.
+For best results, your project `README.md` should contain a concise description and a `# Project Structure` section.
 
 **Example:**
 ```markdown
@@ -26,7 +27,7 @@ For best results, your project `README.md` should contain a concise description 
 
 This project does X by using Y and Z.
 
-## Project Structure
+# Project Structure
 - `src`: Main application source code.
 - `docs`: Project documentation.
 - `tests`: Unit and integration tests.
