@@ -146,6 +146,7 @@ def _handle_solution_loop(request: str, context: str, slug: str, auto_apply: boo
         solution = phases.solve(request, context, current_run_history, tracer=metrics)
 
         if not solution.changes:
+            print("\n✅ The agent provided an explanation without code changes:")
             print(f"\n---\n{solution.explanation}\n---")
             final_status = "completed (explanation only)"
             patch_path = None
