@@ -23,9 +23,7 @@ class Solution(BaseModel):
 # --- Prompts ---
 
 EXPLORE_PROMPT = """
-Your goal is to identify the most relevant folders to inspect based on the user's request and a summary of the project structure.
-This helps to focus the search and avoid analyzing the entire project. Pay attention to documentation files like READMEs if they are listed.
-Your response must be a selection of paths from the 'Project Structure Summary' below. Do not invent paths.
+Your goal is to identify the most relevant folders to inspect based on the user's request and the summary of the project structure.
 
 User Request: {request}
 
@@ -91,7 +89,7 @@ def explore_folders(request: str, protocol: str, history: str, tracer: dict = No
     result = llm.generate_json(prompt, FolderList, tracer=tracer, phase_name="explore_folders", model_name=llm.MODEL_NAME_DEFAULT)
     end_time = time.time()
     if tracer is not None:
-        tracer['phase_explore_folders_duration'] = tracer.get('phase_explore_folders_duration', 0.0) + (end_time - start_time)
+        tracer['kpi.explore_folders.duration_ms'] = (end_time - start_time) * 1000
     return result.folders
 
 def select_files(request: str, file_tree: str, history:str, tracer: dict = None) -> List[str]:
@@ -100,7 +98,7 @@ def select_files(request: str, file_tree: str, history:str, tracer: dict = None)
     result = llm.generate_json(prompt, FileList, tracer=tracer, phase_name="select_files", model_name=llm.MODEL_NAME_DEFAULT)
     end_time = time.time()
     if tracer is not None:
-        tracer['phase_select_files_duration'] = tracer.get('phase_select_files_duration', 0.0) + (end_time - start_time)
+        tracer['kpi.select_files.duration_ms'] = (end_time - start_time) * 1000
     return result.files
 
 def build_context(files: List[str]) -> str:
@@ -112,5 +110,5 @@ def solve(request: str, context: str, history: str, tracer: dict = None) -> Solu
     result = llm.generate_json(prompt, Solution, tracer=tracer, model_name=llm.MODEL_NAME_ADVANCED, phase_name="solve")
     end_time = time.time()
     if tracer is not None:
-        tracer['phase_solve_duration'] = tracer.get('phase_solve_duration', 0.0) + (end_time - start_time)
+        tracer['kpi.solve.duration_ms'] = (end_time - start_time) * 1000
     return result
