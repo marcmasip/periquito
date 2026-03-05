@@ -9,7 +9,7 @@ Usage:
 """
 
 import json, os, re, sys, io, time, subprocess
-from tools import fs, phases
+from tools import fs, phases, print as p
 from tools.patch import preview, apply
 
 AGENT_DIR = '.agent'
@@ -51,14 +51,14 @@ def _run_git_command(command):
         if result.stdout:
             print(result.stdout.strip())
         if result.stderr:
-            print(result.stderr.strip(), file=sys.stderr)
+            p.warning(result.stderr.strip())
         return True
     except subprocess.CalledProcessError as e:
-        print(f"Error executing git command: {' '.join(['git'] + command)}")
-        print(f"Stderr: {e.stderr.strip()}")
+        p.error(f"Error executing git command: {' '.join(['git'] + command)}")
+        p.error(f"Stderr: {e.stderr.strip()}")
         return False
     except FileNotFoundError:
-        print("Error: 'git' command not found. Is git installed and in your PATH?")
+        p.error("Error: 'git' command not found. Is git installed and in your PATH?")
         return False
 
 def _gather_context(request: str, history: str, metrics: dict) -> tuple[list[str] | None, str | None]:
@@ -73,39 +73,39 @@ def _gather_context(request: str, history: str, metrics: dict) -> tuple[list[str
     if all_protocol_folders:
         prospective_tree = fs.build_tree(all_protocol_folders)
         if len(prospective_tree.splitlines()) < 150:
-            print("\n1. 🗺️  Small project tree detected, using all protocol folders.")
+            p.header("1. 🗺️  Small project tree detected, using all protocol folders.")
             folders = all_protocol_folders
             file_tree = prospective_tree
     
     if folders is None: # Fallback for large projects or if protocol has no folders
-        print("\n1. 🗺️  Exploring folders...")
+        p.header("1. 🗺️  Exploring folders...")
         folders = phases.explore_folders(request, protocol, history, tracer=metrics)
     
-    print(f"  > Selected: {', '.join(folders) if folders else 'none'}")
+    p.sub_info(f"Selected: {', '.join(folders) if folders else 'none'}")
 
-    print("\n2. 🌳 Building file tree...")
+    p.header("2. 🌳 Building file tree...")
     if file_tree is None:
         file_tree = fs.build_tree(folders)
-    print(f"---\n{file_tree}\n---")
+    p.panel(file_tree)
 
-    print("\n3. 🎯 Selecting files...")
+    p.header("3. 🎯 Selecting files...")
     files = phases.select_files(request, file_tree, history, tracer=metrics)
-    print(f"  > Selected: {', '.join(files) if files else 'none'}")
+    p.sub_info(f"Selected: {', '.join(files) if files else 'none'}")
     
     if not files:
-        print("  > No files selected. Cannot proceed.")
+        p.warning("No files selected. Cannot proceed.")
         return None, None
 
-    print("\n4. 📖 Reading files...")
+    p.header("4. 📖 Reading files...")
     context = phases.build_context(files)
     lines_read = sum(int(c) for c in re.findall(r'\((\d+) lines\)', context))
-    print(f"  > Read {len(files)} files ({lines_read} lines) into context.")
+    p.sub_info(f"Read {len(files)} files ({lines_read} lines) into context.")
 
     return files, context
 
 def _commit_changes(request: str, solution):
     """Commits the applied changes to git."""
-    print("  > Committing changes via git...")
+    p.sub_info("Committing changes via git...")
     files_to_add = list(set([change['file'] for change in solution.model_dump()['changes']]))
     _run_git_command(['add'] + files_to_add)
 
@@ -117,9 +117,9 @@ def _commit_changes(request: str, solution):
 
 def _get_feedback_for_iteration(solution) -> str | None:
     """Prompts the user for feedback and constructs a report for the next iteration."""
-    feedback = input("\n📝 Please describe the issue with the patch to help me improve it: ").strip()
+    feedback = p.ask("\n📝 Please describe the issue with the patch to help me improve it: ")
     if not feedback:
-        print("No feedback provided. Skipping changes.")
+        p.warning("No feedback provided. Skipping changes.")
         return None
 
     return (
@@ -133,7 +133,7 @@ def _get_feedback_for_iteration(solution) -> str | None:
 
 def _handle_solution_loop(request: str, context: str, slug: str, auto_apply: bool, metrics: dict) -> tuple[str, str | None]:
     """Generates and applies the solution, handling user interaction and retries."""
-    print("\n5. 🧠 Generating solution...")
+    p.header("5. 🧠 Generating solution...")
     current_run_history = ""
     MAX_RETRIES = 3
     patch_path = None
@@ -141,19 +141,19 @@ def _handle_solution_loop(request: str, context: str, slug: str, auto_apply: boo
 
     for attempt in range(MAX_RETRIES):
         if attempt > 0:
-            print(f"\n  > Retrying solution... (Attempt {attempt + 1}/{MAX_RETRIES})")
+            p.info(f"\nRetrying solution... (Attempt {attempt + 1}/{MAX_RETRIES})")
 
         solution = phases.solve(request, context, current_run_history, tracer=metrics)
 
         if not solution.changes:
-            print("\n✅ The agent provided an explanation without code changes:")
-            print(f"\n---\n{solution.explanation}\n---")
+            p.success("\nThe agent provided an explanation without code changes:")
+            p.panel(solution.explanation, title="Explanation")
             final_status = "completed (explanation only)"
             patch_path = None
             break
 
         patch_path = _save_patch(slug, solution)
-        print(f"\n  > Patch saved: {patch_path}")
+        p.sub_info(f"Patch saved: {patch_path}")
 
         user_choice = 'apply' if auto_apply else preview(patch_path)
 
@@ -162,15 +162,15 @@ def _handle_solution_loop(request: str, context: str, slug: str, auto_apply: boo
                 final_status = "applied with errors"
                 break
 
-            print("\n✅ Changes have been applied to your local files.")
-            confirm_commit = 'y' if auto_apply else input("  > Test the changes. Do you want to commit them? (Y/n): ").strip().lower()
+            p.success("\nChanges have been applied to your local files.")
+            confirm_commit = 'y' if auto_apply else p.ask("Test the changes. Do you want to commit them? (Y/n): ").lower()
 
             if confirm_commit in ('', 'y', 'yes'):
                 _commit_changes(request, solution)
                 final_status = "applied and committed"
                 break
             
-            print("\nDiscarding applied changes as requested...")
+            p.warning("\nDiscarding applied changes as requested...")
             files_to_restore = list(set([change['file'] for change in solution.model_dump()['changes']]))
             _run_git_command(['restore'] + files_to_restore)
 
@@ -189,7 +189,7 @@ def _handle_solution_loop(request: str, context: str, slug: str, auto_apply: boo
         
         elif user_choice == 'iterate' and not auto_apply:
             if attempt < MAX_RETRIES - 1:
-                print("\nDiscarding proposed changes...")
+                p.warning("\nDiscarding proposed changes...")
                 _run_git_command(['restore', '.']) # Reset any stray modifications
                 feedback_report = _get_feedback_for_iteration(solution)
                 if feedback_report:
@@ -241,10 +241,11 @@ def _finalize_run(slug: str, start_run_time: float, metrics: dict, log_entries: 
     log_path = _save_log(slug, log_content)
     metrics_path = _save_metrics(slug, metrics)
 
-    print("\n".join(kpi_lines))
-    print(f"\n🏁 Session finished.")
-    print(f"  > Log:     {log_path}")
-    print(f"  > Metrics: {metrics_path}")
+    print()
+    p.panel("\n".join(kpi_lines[1:-1]), title="KPIs")
+    p.success(f"\n🏁 Session finished.")
+    p.sub_info(f"Log:     {log_path}")
+    p.sub_info(f"Metrics: {metrics_path}")
 
 def run_once(request: str, history: str, auto_apply=False) -> str:
     start_run_time = time.time()
@@ -266,7 +267,7 @@ def run_once(request: str, history: str, auto_apply=False) -> str:
                 result_message = f"Request: '{request}' | status: {final_status}"
 
     except Exception as e:
-        print(f"\n❌ An unexpected error occurred during execution: {e}")
+        p.error(f"\nAn unexpected error occurred during execution: {e}")
         import traceback
         traceback.print_exc()
         log_entries.append(f"\n❌ An unexpected error occurred: {e}\n{traceback.format_exc()}")
@@ -278,7 +279,7 @@ def run_once(request: str, history: str, auto_apply=False) -> str:
 
 def main():
     os.makedirs(AGENT_DIR, exist_ok=True)
-    print("🤖 Dev Agent ready.  (exit / quit to stop)\n")
+    p.header("🤖 Dev Agent ready.  (exit / quit to stop)")
 
     history = ''
     # Single-shot mode: python agent.py "request"
@@ -289,7 +290,7 @@ def main():
 
     while True:
         try:
-            request = input("👉 ").strip()
+            request = p.ask("")
         except (EOFError, KeyboardInterrupt):
             break
         if not request or request.lower() in ('exit', 'quit'):
