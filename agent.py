@@ -73,12 +73,12 @@ def _gather_context(request: str, history: str, metrics: dict) -> tuple[list[str
     if all_protocol_folders:
         prospective_tree = fs.build_tree(all_protocol_folders)
         if len(prospective_tree.splitlines()) < 150:
-            p.header("1. 🗺️  Small project tree detected, using all protocol folders.")
+            p.header("1. 👀 Small project detected, scanning all protocol folders.")
             folders = all_protocol_folders
             file_tree = prospective_tree
     
     if folders is None: # Fallback for large projects or if protocol has no folders
-        p.say("Exploring folders...")
+        p.say("Scanning the directory nest...")
         folders = phases.explore_folders(request, protocol, history, tracer=metrics)
     
     p.sub_info(f"Selected: {', '.join(folders) if folders else 'none'}")
@@ -88,7 +88,7 @@ def _gather_context(request: str, history: str, metrics: dict) -> tuple[list[str
         file_tree = fs.build_tree(folders)
     p.panel(file_tree)
 
-    p.say("Picking files ...")
+    p.say("Picking the most interesting files...")
     files = phases.select_files(request, file_tree, history, tracer=metrics)
     p.sub_info(f"Selected: {', '.join(files) if files else 'none'}")
     
@@ -132,7 +132,7 @@ def _get_feedback_for_iteration(solution) -> str | None:
 
 def _handle_solution_loop(request: str, context: str, slug: str, auto_apply: bool, metrics: dict) -> tuple[str, str | None]:
     """Generates and applies the solution, handling user interaction and retries."""
-    p.header("5. 🧠 Generating solution...")
+    p.say("Ruffling my feathers and thinking...")
     current_run_history = ""
     MAX_RETRIES = 3
     patch_path = None
@@ -145,7 +145,7 @@ def _handle_solution_loop(request: str, context: str, slug: str, auto_apply: boo
         solution = phases.solve(request, context, current_run_history, tracer=metrics)
 
         if not solution.changes:
-            p.success("\nThe agent provided an explanation without code changes:")
+            p.say("\nI've got a solution:")
             p.panel(solution.explanation, title="Explanation")
             final_status = "completed (explanation only)"
             patch_path = None
@@ -161,7 +161,7 @@ def _handle_solution_loop(request: str, context: str, slug: str, auto_apply: boo
                 final_status = "applied with errors"
                 break
 
-            p.success("\nChanges have been applied to your local files.")
+            p.success("\n✨ All set! The changes are nested in your local files.")
             confirm_commit = 'y' if auto_apply else p.ask("Test the changes. Do you want to commit them? (Y/n): ").lower()
 
             if confirm_commit in ('', 'y', 'yes'):
@@ -242,7 +242,7 @@ def _finalize_run(slug: str, start_run_time: float, metrics: dict, log_entries: 
 
     print()
     p.panel("\n".join(kpi_lines[1:-1]), title="KPIs")
-    p.success(f"\n🏁 Session finished.")
+    p.success(f"\n🏁 Flight complete! Ready for the next adventure.")
     p.sub_info(f"Log:     {log_path}")
     p.sub_info(f"Metrics: {metrics_path}")
 
@@ -278,8 +278,8 @@ def run_once(request: str, history: str, auto_apply=False) -> str:
 
 def main():
     os.makedirs(AGENT_DIR, exist_ok=True)
-    p.wisp("Periquito the lightweight Gemini code agent is here!  (exit / quit to stop)")
-    p.say("Hi!")
+    p.wisp("🐦 Periquito, your agile coding assistant, at your service! (type exit/quit to stop)")
+    p.say("¡Chirp! What can I code for you today?")
     p.header("")
     history = ''
     # Single-shot mode: python agent.py "request"
