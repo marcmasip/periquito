@@ -11,8 +11,9 @@ Usage:
 import json, os, re, sys, io, time, subprocess
 from tools import fs, phases, print as p
 from tools.patch import preview, apply
+from tools.config import settings
 
-AGENT_DIR = '.agent'
+AGENT_DIR = settings.agent_dir
 
 def _slug(text: str) -> str:
     return re.sub(r'[^a-z0-9_]', '', text.lower().replace(' ', '_'))[:50] or 'change'
@@ -75,8 +76,8 @@ def _gather_context(request: str, history: str, metrics: dict) -> tuple[list[str
 
     if all_protocol_folders:
         prospective_tree = fs.build_tree(all_protocol_folders)
-        if len(prospective_tree.splitlines()) < 150:
-            p.header("1. 👀 Small project detected, scanning all protocol folders.")
+        if len(prospective_tree.splitlines()) < settings.small_project_threshold_lines:
+            p.say("Small project detected 🐣")
             folders = all_protocol_folders
             file_tree = prospective_tree
     
@@ -104,7 +105,7 @@ def _gather_context(request: str, history: str, metrics: dict) -> tuple[list[str
         file_tree = fs.build_tree(folders)
         
     tree_lines = len(file_tree.splitlines())
-    if tree_lines > 200:
+    if tree_lines > settings.large_file_tree_threshold_lines:
         p.warning(f"The file tree has {tree_lines} lines/files. This is a large list.")
         if p.ask("Do you want to proceed exploring this amount of files? (Y/n): ").lower() not in ('', 'y', 'yes'):
             return None, None
@@ -140,7 +141,7 @@ def _commit_changes(request: str, solution):
     files_to_add = list(set([change['file'] for change in solution.model_dump()['changes']]))
     _run_git_command(['add'] + files_to_add)
 
-    commit_message = f"feat: {request}"
+    commit_message = f"{settings.commit_message_prefix}{request}"
     if len(commit_message) > 72:
         commit_message = commit_message[:69] + "..."
 
@@ -166,7 +167,7 @@ def _handle_solution_loop(request: str, context: str, slug: str, auto_apply: boo
     """Generates and applies the solution, handling user interaction and retries."""
     p.say("Ruffling my feathers, eating some seeds, and thinking...")
     current_run_history = ""
-    MAX_RETRIES = 5
+    MAX_RETRIES = settings.max_retries
     patch_path = None
     final_status = "error"
     next_request = None
@@ -277,13 +278,13 @@ def _finalize_run(slug: str, start_run_time: float, metrics: dict, log_entries: 
         "\n--- KPIs ---",
         f"Total Run Time: {metrics.get('total_run_duration', 0):.2f} seconds",
         f"LLM Calls: {metrics.get('llm_calls_count', 0)}",
-        f"LLM Total Duration: {metrics.get('llm_total_duration', 0):.2f} seconds",
-        f"LLM Total Prompt Tokens: {metrics.get('llm_total_prompt_tokens', 0)}",
-        f"LLM Total Candidates Tokens: {metrics.get('llm_total_candidates_tokens', 0)}",
-        f"LLM Total Tokens: {metrics.get('llm_total_tokens', 0)}",
-        f"Phase 'explore_folders' Duration: {metrics.get('phase_explore_folders_duration', 0):.2f} seconds",
-        f"Phase 'select_files' Duration: {metrics.get('phase_select_files_duration', 0):.2f} seconds",
-        f"Phase 'solve' Duration: {metrics.get('phase_solve_duration', 0):.2f} seconds",
+        f" Duration: {metrics.get('llm_total_duration', 0):.2f} seconds",
+        f" Prompt Tokens: {metrics.get('llm_total_prompt_tokens', 0)}",
+        f" Candidates Tokens: {metrics.get('llm_total_candidates_tokens', 0)}",
+        f" Tokens: {metrics.get('llm_total_tokens', 0)}",
+        f"Phase 'explore_folders' {metrics.get('phase_explore_folders_duration', 0):.2f} seconds",
+        f"Phase 'select_files' {metrics.get('phase_select_files_duration', 0):.2f} seconds",
+        f"Phase 'solve' {metrics.get('phase_solve_duration', 0):.2f} seconds",
         "------------"
     ]
     log_entries.extend(kpi_lines)
@@ -294,7 +295,7 @@ def _finalize_run(slug: str, start_run_time: float, metrics: dict, log_entries: 
 
     print()
     p.panel("\n".join(kpi_lines[1:-1]), title="KPIs")
-    p.success(f"\n🏁 Flight complete! The bird has landed. Ready for the next adventure.")
+    p.say(f"\n He acabado espero que te guste")
     p.sub_info(f"Log:     {log_path}")
     p.sub_info(f"Metrics: {metrics_path}")
 
@@ -346,10 +347,10 @@ def _present_initial_context():
         p.header(first_headline)
 
     protocol = fs.read_protocol()
+   
     folders = fs.parse_folders_from_protocol(protocol)
     
     if folders:
-        p.info("Key folders from README:")
         p.panel('\n'.join(f"  - {f}" for f in folders), border_color=p.Ansi.DARK_GRAY)
 
 def main():

@@ -1,0 +1,12 @@
+{
+  "agent_dir": ".agent",
+  "max_retries": 5,
+  "commit_message_prefix": "feat: ",
+  "small_project_threshold_lines": 150,
+  "large_file_tree_threshold_lines": 200,
+  "prompt_templates": {
+    "explore": "src/template/explore.txt",
+    "select": "src/template/select.txt",
+    "solve": "src/template/solve.txt"
+  }
+}
