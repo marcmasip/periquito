@@ -100,7 +100,6 @@ def _gather_context(request: str, history: str, metrics: dict) -> tuple[list[str
     
     p.sub_info(f"Selected: {', '.join(folders) if folders else 'none'}")
 
-    p.sub_info("Building file tree...")
     if file_tree is None:
         file_tree = fs.build_tree(folders)
         
@@ -110,7 +109,7 @@ def _gather_context(request: str, history: str, metrics: dict) -> tuple[list[str
         if p.ask("Do you want to proceed exploring this amount of files? (Y/n): ").lower() not in ('', 'y', 'yes'):
             return None, None
 
-    p.panel(file_tree)
+    p.panel(file_tree, "Files listed")
 
     p.say("Picking the most interesting files...")
     files = phases.select_files(request, file_tree, history, tracer=metrics)

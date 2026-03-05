@@ -142,9 +142,9 @@ def _preflight_check(changes) -> bool:
 
         if not search_block: # Creating a new file
             # Check if target file already exists
-            if os.path.exists(file_path):
-                printer.error(f"Pre-flight check failed for {file_path}: File already exists, but 'search' block is empty (intended for creation).")
-                return False
+            #if os.path.exists(file_path):
+            #    printer.error(f"Pre-flight check failed for {file_path}: File already exists, but 'search' block is empty (intended for creation).")
+            #    return False
             # Check if parent directory exists or if we can infer it's creatable
             dir_name = os.path.dirname(file_path)
             if dir_name and not os.path.isdir(dir_name) and os.path.exists(dir_name):

@@ -7,9 +7,9 @@ set -e # Exit immediately if a command exits with a non-zero status.
 
 # Get the directory where this install script is located.
 INSTALL_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-WRAPPER_SCRIPT_NAME="aicli"
+WRAPPER_SCRIPT_NAME="periquito"
 WRAPPER_SCRIPT_PATH="$INSTALL_DIR/$WRAPPER_SCRIPT_NAME"
-TARGET_DIR="/usr/local/bin"
+TARGET_DIR="/usr/bin"
 SYMLINK_PATH="$TARGET_DIR/$WRAPPER_SCRIPT_NAME"
 VENV_DIR="$INSTALL_DIR/venv"
 
