@@ -1,6 +1,7 @@
 from pydantic import BaseModel, Field
 from typing import List, Dict
 from . import llm, fs
+from .config import settings
 import time
 
 # --- Data Models ---
@@ -24,67 +25,20 @@ class Solution(BaseModel):
 
 # --- Prompts ---
 
-EXPLORE_PROMPT = """
-Your goal is to identify the most relevant folders to inspect based on the user's request and the summary of the project structure.
+def _load_prompt_template(template_path: str) -> str:
+    """Loads a prompt template from a file."""
+    try:
+        with open(template_path, 'r', encoding='utf-8') as f:
+            return f.read()
+    except (IOError, FileNotFoundError) as e:
+        raise ValueError(f"Could not load prompt template from '{template_path}'. "
+                         f"Please ensure the file exists and the path in 'config.json' is correct. "
+                         f"Error: {e}")
 
-User Request: {request}
-
-Project Structure Summary:
----
-{protocol}
----
-
-History of previous interactions:
----
-{history}
----
-
-Respond with a JSON object containing a 'folders' key with a list of folder paths.
-"""
-
-SELECT_PROMPT = """
-From the file tree of the relevant folders selected previously, your task is to pinpoint the exact files needed to solve the user's request.
-Select the minimum set of files required to read and understand the existing code before proposing changes.
-
-User Request: {request}
-
-File Tree of Relevant Folders:
----
-{file_tree}
----
-
-History of previous interactions:
----
-{history}
----
-
-Respond with a JSON object containing a 'files' key with a list of file paths.
-"""
-
-SOLVE_PROMPT = """
-You are a Senior proficient software engineer. Your task is to solve the user's request based on the provided context.
-Provide a detailed explanation of your solution and a code patch in JSON format.
-The JSON patch should contain a list of changes, each with 'file', 'search', and 'replace' keys.
-'search' must be an exact match of the code to be replaced. If it's a new file, 'search' should be an empty string.
-'replace' is the new code.
-
-If you need more files to understand the context, provide their paths in 'request_files'.
-If the task requires a subsequent phase, provide instructions for it in 'next_phase_instructions'.
-
-User Request: {request}
-
-Context (selected file contents):
----
-{context}
----
-
-History of previous interactions:
----
-{history}
----
-
-Respond with a single JSON object containing 'explanation', 'changes', and optionally 'request_files' and 'next_phase_instructions'.
-"""
+# Load prompts from files specified in config
+EXPLORE_PROMPT = _load_prompt_template(settings.prompt_templates['explore'])
+SELECT_PROMPT = _load_prompt_template(settings.prompt_templates['select'])
+SOLVE_PROMPT = _load_prompt_template(settings.prompt_templates['solve'])
 
 # --- Phases ---
 
