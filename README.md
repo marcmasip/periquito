@@ -4,7 +4,7 @@ A minimalist, command-line Gemini AI coding agent.
 It analyzes a codebase, understands requests, and generates reviewable code patches.
 
 
-<img src="https://azestudio.net/img/periquito_cli.png" width="400"> <img src="https://azestudio.net/img/periquito_cli2.png" width="570">
+<img src="https://azestudio.net/img/periquito_cli.png" width="360"> <img src="https://azestudio.net/img/periquito_cli2.png" width="510">
 
 ## Usage
 
