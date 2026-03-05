@@ -70,6 +70,9 @@ def _gather_context(request: str, history: str, metrics: dict) -> tuple[list[str
     folders = None
     file_tree = None
 
+   
+
+
     if all_protocol_folders:
         prospective_tree = fs.build_tree(all_protocol_folders)
         if len(prospective_tree.splitlines()) < 150:
@@ -326,10 +329,34 @@ def run_once(request: str, history: str, auto_apply=False) -> tuple[str, str | N
 
     return result_message, next_request
 
+def _present_initial_context():
+    """Presents key info from README and available folders at startup."""
+    readme_content = fs.read_readme()
+    if "No README file found." in readme_content:
+        return
+
+    # Extract first headline (H1)
+    first_headline = ""
+    for line in readme_content.splitlines():
+        if line.strip().startswith('# '):
+            first_headline = line.strip().lstrip('# ').strip()
+            break
+    
+    if first_headline:
+        p.header(first_headline)
+
+    protocol = fs.read_protocol()
+    folders = fs.parse_folders_from_protocol(protocol)
+    
+    if folders:
+        p.info("Key folders from README:")
+        p.panel('\n'.join(f"  - {f}" for f in folders), border_color=p.Ansi.DARK_GRAY)
+
 def main():
     os.makedirs(AGENT_DIR, exist_ok=True)
     p.wisp("🐦 Periquito, your small but mighty (pequeño pero matón) coding assistant! (type exit/quit to stop)")
     p.say("¡Chirp! What can I code for you today?")
+    _present_initial_context()
     p.header("")
     history = ''
     # Single-shot mode: python agent.py "request"
