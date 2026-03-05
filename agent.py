@@ -77,10 +77,7 @@ def run_once(request: str, history: str, auto_apply=False) -> str:
     try:
         protocol = fs.read_protocol()
 
-        # Step 1: Determine folders to scan.
-        print("\n1. 🗺️  Searching for relevant files & folders...")
-        print("  > Using protocol as reference:")
-        print(f"---\n{protocol.strip()}\n---")
+        # Step 1: Determine folders to scan. For small projects, use all folders from protocol.
         all_protocol_folders = fs.parse_folders_from_protocol(protocol)
         folders = None
         file_tree = None
@@ -88,12 +85,12 @@ def run_once(request: str, history: str, auto_apply=False) -> str:
         if all_protocol_folders:
             prospective_tree = fs.build_tree(all_protocol_folders)
             if len(prospective_tree.splitlines()) < 150:
-                print("  > Small project detected, using all protocol folders.")
+                print("\n1. 🗺️  Small project tree detected, using all protocol folders.")
                 folders = all_protocol_folders
                 file_tree = prospective_tree
         
         if folders is None: # Fallback for large projects or if protocol has no folders
-            print("  > Large project, exploring to select most relevant folders...")
+            print("\n1. 🗺️  Exploring folders...")
             folders = phases.explore_folders(request, protocol, history, tracer=metrics)
         
         print(f"  > Selected: {', '.join(folders) if folders else 'none'}")
@@ -140,7 +137,18 @@ def run_once(request: str, history: str, auto_apply=False) -> str:
 
                 if user_choice == 'apply':
                     ok = apply(patch_path)
-                    if ok:
+                    if not ok:
+                        final_status = "applied with errors"
+                        break # apply() already handled printing errors and restoring files
+
+                    # Changes applied, now confirm with user
+                    print("\n✅ Changes have been applied to your local files.")
+                    
+                    confirm_commit = 'y' # Default to 'yes' for auto_apply
+                    if not auto_apply:
+                        confirm_commit = input("  > Test the changes. Do you want to commit them? (Y/n): ").strip().lower()
+
+                    if confirm_commit in ('', 'y', 'yes'):
                         print("  > Committing changes via git...")
                         files_to_add = list(set([change['file'] for change in solution.model_dump()['changes']]))
                         _run_git_command(['add'] + files_to_add)
@@ -151,9 +159,34 @@ def run_once(request: str, history: str, auto_apply=False) -> str:
 
                         _run_git_command(['commit', '-m', commit_message])
                         final_status = "applied and committed"
+                        break # Success, exit the loop
+                    
+                    # User said 'n', so we revert and iterate.
+                    print("\nDiscarding applied changes as requested...")
+                    files_to_restore = list(set([change['file'] for change in solution.model_dump()['changes']]))
+                    _run_git_command(['restore'] + files_to_restore)
+
+                    if attempt < MAX_RETRIES - 1:
+                        feedback = input("\n📝 Please describe the issue with the patch to help me improve it: ").strip()
+                        if not feedback:
+                            print("No feedback provided. Skipping changes.")
+                            final_status = "skipped"
+                            break
+
+                        failed_attempt_report = (
+                            f"\n\n--- Previous Attempt (Failed) ---\n"
+                            f"I generated a patch that was applied but was incorrect.\n"
+                            f"Explanation:\n{solution.explanation}\n"
+                            f"Patch:\n{json.dumps(solution.model_dump()['changes'], indent=2)}\n"
+                            f"User Feedback on Failure: '{feedback}'\n"
+                            f"--- End of Previous Attempt ---\n"
+                        )
+                        current_run_history += failed_attempt_report
+                        continue # Go to next iteration of the loop
                     else:
-                        final_status = "applied with errors"
-                    break
+                        print("\n❌ Maximum number of retries reached.")
+                        final_status = "skipped (max retries)"
+                        break
                 elif user_choice == 'skip':
                     final_status = "skipped"
                     break
@@ -243,95 +276,25 @@ def run_once(request: str, history: str, auto_apply=False) -> str:
 
     return result_message
 
-def main_gui():
-    import tkinter as tk
-    from tkinter import scrolledtext
-    import threading
-
-    history = ''
-
-    window = tk.Tk()
-    window.title("Dev Agent")
-    window.geometry("800x600")
-
-    main_frame = tk.Frame(window, padx=10, pady=10)
-    main_frame.pack(fill=tk.BOTH, expand=True)
-
-    # --- Input Frame ---
-    input_frame = tk.Frame(main_frame)
-    input_frame.pack(fill=tk.X, pady=(0, 10))
-
-    tk.Label(input_frame, text="Request:").pack(side=tk.LEFT, padx=(0, 5))
-    request_entry = tk.Entry(input_frame)
-    request_entry.pack(side=tk.LEFT, fill=tk.X, expand=True)
-
-    # --- Output Frame ---
-    output_frame = tk.Frame(main_frame)
-    output_frame.pack(fill=tk.BOTH, expand=True)
-    tk.Label(output_frame, text="History & Results:").pack(anchor='w')
-    output_area = scrolledtext.ScrolledText(output_frame, wrap=tk.WORD, state='disabled', height=10)
-    output_area.pack(fill=tk.BOTH, expand=True, pady=(5,0))
-
-    def submit_request():
-        nonlocal history
-        request = request_entry.get().strip()
-        if not request:
-            return
-        
-        # Disable input widgets
-        submit_button.config(state=tk.DISABLED)
-        request_entry.config(state=tk.DISABLED)
-        
-        request_entry.delete(0, tk.END)
-
-        # Log request to output area
-        output_area.config(state='normal')
-        output_area.insert(tk.END, f"👉 {request}\n")
-        output_area.see(tk.END)
-        output_area.config(state='disabled')
-
-        def run_in_thread():
-            nonlocal history
-            result_message = run_once(request, history)
-            history += result_message + '\n'
-
-            def update_gui():
-                # Log result
-                output_area.config(state='normal')
-                output_area.insert(tk.END, f"✅ Result: {result_message}\n\n")
-                output_area.see(tk.END)
-                output_area.config(state='disabled')
-                
-                # Re-enable input widgets
-                submit_button.config(state=tk.NORMAL)
-                request_entry.config(state=tk.NORMAL)
-                request_entry.focus_set()
-            
-            window.after(0, update_gui)
-
-        # Run agent in a background thread
-        thread = threading.Thread(target=run_in_thread, daemon=True)
-        thread.start()
-
-    submit_button = tk.Button(input_frame, text="Submit", command=submit_request)
-    submit_button.pack(side=tk.LEFT, padx=(5, 0))
-    request_entry.bind("<Return>", lambda event: submit_request())
-
-    print("🤖 Dev Agent GUI ready. Console will show detailed progress.\n")
-    window.mainloop()
-
 def main():
     os.makedirs(AGENT_DIR, exist_ok=True)
+    print("🤖 Dev Agent ready.  (exit / quit to stop)\n")
 
+    history = ''
     # Single-shot mode: python agent.py "request"
     if len(sys.argv) > 1:
-        history = ''
         req = ' '.join(sys.argv[1:])
-        run_once(req, history, auto_apply=False)
+        history += run_once(req, history, auto_apply=False) + '\n'
         return
 
-    # GUI mode by default
-    main_gui()
+    while True:
+        try:
+            request = input("👉 ").strip()
+        except (EOFError, KeyboardInterrupt):
+            break
+        if not request or request.lower() in ('exit', 'quit'):
+            break
+        history += run_once(request, history) + '\n'
 
 if __name__ == '__main__':
     main()
