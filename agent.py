@@ -243,25 +243,95 @@ def run_once(request: str, history: str, auto_apply=False) -> str:
 
     return result_message
 
-def main():
-    os.makedirs(AGENT_DIR, exist_ok=True)
-    print("🤖 Dev Agent ready.  (exit / quit to stop)\n")
+def main_gui():
+    import tkinter as tk
+    from tkinter import scrolledtext
+    import threading
 
     history = ''
+
+    window = tk.Tk()
+    window.title("Dev Agent")
+    window.geometry("800x600")
+
+    main_frame = tk.Frame(window, padx=10, pady=10)
+    main_frame.pack(fill=tk.BOTH, expand=True)
+
+    # --- Input Frame ---
+    input_frame = tk.Frame(main_frame)
+    input_frame.pack(fill=tk.X, pady=(0, 10))
+
+    tk.Label(input_frame, text="Request:").pack(side=tk.LEFT, padx=(0, 5))
+    request_entry = tk.Entry(input_frame)
+    request_entry.pack(side=tk.LEFT, fill=tk.X, expand=True)
+
+    # --- Output Frame ---
+    output_frame = tk.Frame(main_frame)
+    output_frame.pack(fill=tk.BOTH, expand=True)
+    tk.Label(output_frame, text="History & Results:").pack(anchor='w')
+    output_area = scrolledtext.ScrolledText(output_frame, wrap=tk.WORD, state='disabled', height=10)
+    output_area.pack(fill=tk.BOTH, expand=True, pady=(5,0))
+
+    def submit_request():
+        nonlocal history
+        request = request_entry.get().strip()
+        if not request:
+            return
+        
+        # Disable input widgets
+        submit_button.config(state=tk.DISABLED)
+        request_entry.config(state=tk.DISABLED)
+        
+        request_entry.delete(0, tk.END)
+
+        # Log request to output area
+        output_area.config(state='normal')
+        output_area.insert(tk.END, f"👉 {request}\n")
+        output_area.see(tk.END)
+        output_area.config(state='disabled')
+
+        def run_in_thread():
+            nonlocal history
+            result_message = run_once(request, history)
+            history += result_message + '\n'
+
+            def update_gui():
+                # Log result
+                output_area.config(state='normal')
+                output_area.insert(tk.END, f"✅ Result: {result_message}\n\n")
+                output_area.see(tk.END)
+                output_area.config(state='disabled')
+                
+                # Re-enable input widgets
+                submit_button.config(state=tk.NORMAL)
+                request_entry.config(state=tk.NORMAL)
+                request_entry.focus_set()
+            
+            window.after(0, update_gui)
+
+        # Run agent in a background thread
+        thread = threading.Thread(target=run_in_thread, daemon=True)
+        thread.start()
+
+    submit_button = tk.Button(input_frame, text="Submit", command=submit_request)
+    submit_button.pack(side=tk.LEFT, padx=(5, 0))
+    request_entry.bind("<Return>", lambda event: submit_request())
+
+    print("🤖 Dev Agent GUI ready. Console will show detailed progress.\n")
+    window.mainloop()
+
+def main():
+    os.makedirs(AGENT_DIR, exist_ok=True)
+
     # Single-shot mode: python agent.py "request"
     if len(sys.argv) > 1:
+        history = ''
         req = ' '.join(sys.argv[1:])
-        history += run_once(req, history, auto_apply=False) + '\n'
+        run_once(req, history, auto_apply=False)
         return
 
-    while True:
-        try:
-            request = input("👉 ").strip()
-        except (EOFError, KeyboardInterrupt):
-            break
-        if not request or request.lower() in ('exit', 'quit'):
-            break
-        history += run_once(request, history) + '\n'
+    # GUI mode by default
+    main_gui()
 
 if __name__ == '__main__':
     main()
