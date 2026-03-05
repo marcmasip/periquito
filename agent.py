@@ -77,7 +77,10 @@ def run_once(request: str, history: str, auto_apply=False) -> str:
     try:
         protocol = fs.read_protocol()
 
-        # Step 1: Determine folders to scan. For small projects, use all folders from protocol.
+        # Step 1: Determine folders to scan.
+        print("\n1. 🗺️  Searching for relevant files & folders...")
+        print("  > Using protocol as reference:")
+        print(f"---\n{protocol.strip()}\n---")
         all_protocol_folders = fs.parse_folders_from_protocol(protocol)
         folders = None
         file_tree = None
@@ -85,12 +88,12 @@ def run_once(request: str, history: str, auto_apply=False) -> str:
         if all_protocol_folders:
             prospective_tree = fs.build_tree(all_protocol_folders)
             if len(prospective_tree.splitlines()) < 150:
-                print("\n1. 🗺️  Small project tree detected, using all protocol folders.")
+                print("  > Small project detected, using all protocol folders.")
                 folders = all_protocol_folders
                 file_tree = prospective_tree
         
         if folders is None: # Fallback for large projects or if protocol has no folders
-            print("\n1. 🗺️  Exploring folders...")
+            print("  > Large project, exploring to select most relevant folders...")
             folders = phases.explore_folders(request, protocol, history, tracer=metrics)
         
         print(f"  > Selected: {', '.join(folders) if folders else 'none'}")
