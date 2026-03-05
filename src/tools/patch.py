@@ -19,7 +19,8 @@ def preview(patch_path: str) -> str:
     Presents a summary of changes, allows viewing detailed diffs,
     and returns 'apply', 'skip', or 'retry' based on user input.
     """
-    printer.header(f"Previewing changes from {patch_path}")
+    printer.say(f"Previewing changes")
+    printer.sub_info(f"{patch_path}")
     try:
         with open(patch_path, 'r', encoding='utf-8') as f:
             data = json.load(f)
@@ -50,7 +51,7 @@ def preview(patch_path: str) -> str:
         grouped_file_changes[file].append((i, change)) # Store original index and change data
 
     for file_path, file_change_list in grouped_file_changes.items():
-        printer.info(f"File: {file_path}")
+        printer.sub_info(f"📄 {file_path}")
         for original_idx, change in file_change_list:
             search_block = change.get('search', '')
             replace_block = change.get('replace', '')
@@ -58,17 +59,17 @@ def preview(patch_path: str) -> str:
             summary = ""
             if not search_block:
                 lines_added = len(replace_block.splitlines())
-                summary = f"Create new file ({lines_added} lines)"
+                summary = f"🌱 Create new file ({lines_added} lines)"
             else:
                 search_lines = len(search_block.splitlines())
                 replace_lines = len(replace_block.splitlines())
                 
                 if search_lines == replace_lines:
-                    summary = f"Modify ({search_lines} lines changed)"
+                    summary = f"🩹 Modify ({search_lines} lines changed)"
                 elif search_lines == 0: # Pure addition within a file
-                    summary = f"Add {replace_lines} lines"
+                    summary = f"🧾 Add {replace_lines} lines"
                 elif replace_lines == 0: # Pure removal within a file
-                    summary = f"Remove {search_lines} lines"
+                    summary = f"🚽 Remove {search_lines} lines"
                 else: # Mixed change
                     summary = f"Modify (removed {search_lines}, added {replace_lines} lines)"
             
@@ -92,10 +93,10 @@ def preview(patch_path: str) -> str:
         choice = printer.ask("Enter your choice (a): ").lower()
 
         if choice == 'a' or choice == '':
-            printer.info("Proceeding with application...")
+            printer.sub_info("Proceeding with application...")
             return 'apply'
         elif choice == 's' or choice == 'q':
-            printer.info("Skipping changes as requested.")
+            printer.sub_info("Skipping changes as requested.")
             return 'skip'
         elif choice == 'i' or choice == 'r':
             return 'iterate'
@@ -131,7 +132,6 @@ def preview(patch_path: str) -> str:
 
 def _preflight_check(changes) -> bool:
     """Performs checks before applying any changes."""
-    printer.info("Performing pre-flight checks...")
     for i, change in enumerate(changes):
         file_path = change.get('file')
         search_block = change.get('search', '')
@@ -164,12 +164,13 @@ def _preflight_check(changes) -> bool:
             except Exception as e:
                 printer.error(f"Pre-flight check failed reading {file_path}: {e}")
                 return False
-    printer.success("Pre-flight checks passed.")
+    printer.sub_info("Pre-flight checks passed.")
     return True
 
 def apply(patch_path: str) -> bool:
     """Applies the changes from the patch file."""
-    printer.header(f"Applying changes from {patch_path}")
+    printer.say(f" 🔨 Applying changes ")
+    printer.sub_info(f"      from {patch_path}")
     try:
         with open(patch_path, 'r', encoding='utf-8') as f:
             data = json.load(f)
@@ -199,7 +200,7 @@ def apply(patch_path: str) -> bool:
                     os.makedirs(dir_name, exist_ok=True)
                 with open(file_path, 'w', encoding='utf-8') as f:
                     f.write(replace_block)
-                printer.success(f"Created: {file_path}")
+                printer.sub_info(f"Created: {file_path}")
             else: # Search and replace
                 with open(file_path, 'r', encoding='utf-8') as f:
                     content = f.read()
@@ -208,7 +209,7 @@ def apply(patch_path: str) -> bool:
                 
                 with open(file_path, 'w', encoding='utf-8') as f:
                     f.write(new_content)
-                printer.success(f"Modified: {file_path}")
+                printer.sub_info(f"Modified: {file_path}")
             
             applied_files.add(file_path) # Add to applied only on success
         except Exception as e:
@@ -218,6 +219,4 @@ def apply(patch_path: str) -> bool:
                 _run_command(['git', 'restore'] + list(applied_files))
             return False
             
-    print()
-    printer.success("All changes applied successfully.")
     return True

@@ -1,0 +1,15 @@
+Your goal is to identify the most relevant folders to inspect based on the user's request and the summary of the project structure.
+
+User Request: {request}
+
+Project Structure Summary:
+---
+{protocol}
+---
+
+History of previous interactions:
+---
+{history}
+---
+
+Respond with a JSON object containing a 'folders' key with a list of folder paths.

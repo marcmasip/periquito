@@ -1,0 +1,16 @@
+From the file tree of the relevant folders selected previously, your task is to pinpoint the exact files needed to solve the user's request.
+Select the minimum set of files required to read and understand the existing code before proposing changes.
+
+User Request: {request}
+
+File Tree of Relevant Folders:
+---
+{file_tree}
+---
+
+History of previous interactions:
+---
+{history}
+---
+
+Respond with a JSON object containing a 'files' key with a list of file paths.

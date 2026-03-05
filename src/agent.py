@@ -206,8 +206,8 @@ def _handle_solution_loop(request: str, context: str, slug: str, auto_apply: boo
                     final_status = "applied with errors"
                     break
 
-                p.success("\n✨ All set! The changes are nested in your local files.")
-                confirm_commit = 'y' if auto_apply else p.ask("Test the changes. Do you want to commit them? (Y/n): ").lower()
+                p.say("Test the changes")
+                confirm_commit = 'y' if auto_apply else p.ask("Do you want to commit them? (Y/n): ").lower()
 
                 if confirm_commit in ('', 'y', 'yes'):
                     _commit_changes(request, solution)
@@ -295,7 +295,7 @@ def _finalize_run(slug: str, start_run_time: float, metrics: dict, log_entries: 
 
     print()
     p.panel("\n".join(kpi_lines[1:-1]), title="KPIs")
-    p.say(f"\n He acabado espero que te guste")
+    p.say(f" Adios me voy 🕊")
     p.sub_info(f"Log:     {log_path}")
     p.sub_info(f"Metrics: {metrics_path}")
 

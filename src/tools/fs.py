@@ -26,7 +26,7 @@ def read_protocol() -> str:
 
     if "No README file found." not in readme_content:
         # Use regex to find content between '### Project Structure' or '### Source' and the next heading or end of file.
-        match = re.search(r'### (?:Project Structure|Source)\s*\n(.*?)(?=\n#{1,3} |\Z)', readme_content, re.DOTALL | re.IGNORECASE)
+        match = re.search(r'# (?:Project Structure|Source|Agent)\s*\n(.*?)(?=\n#{1,3} |\Z)', readme_content, re.DOTALL | re.IGNORECASE)
         if match and match.group(1).strip():
             protocol_content = match.group(1).strip()
 

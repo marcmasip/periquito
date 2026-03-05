@@ -41,7 +41,7 @@ def info(message: str, **kwargs):
 
 def sub_info(message: str, **kwargs):
     """Prints a sub-informational message, indented."""
-    print(f"  > {Ansi.CYAN}{message}{Ansi.RESET}", **kwargs)
+    print(f"  {Ansi.DARK_GRAY}> {message}{Ansi.RESET}", **kwargs)
 
 def success(message:str, **kwargs):
     """Prints a success message in green."""

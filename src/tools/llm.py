@@ -5,6 +5,8 @@ import sys
 from google import genai
 from google.genai import types
 from pydantic import BaseModel
+from . import print as printer
+
 
 # 1. Instanciación del Cliente
 try:
@@ -51,6 +53,9 @@ def generate_json(prompt: str, pydantic_model: type[BaseModel], tracer: dict = N
     start_time = time.time()
     try:
         # 3. Llamada mediante client.models
+		printer.sub_info(f"  > LLM '{phase_name}' ({Ansi.YELLOW}{model_name}{Ansi.RESET}) ...")
+		
+		
         response = client.models.generate_content(
             model=model_name,
             contents=prompt,

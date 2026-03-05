@@ -20,7 +20,7 @@ SCRIPT_DIR="$( cd -P "$( dirname "$SOURCE" )" >/dev/null 2>&1 && pwd )"
 
 # Define the path to the main Python application script.
 # Assumes the main script is located at 'src/main.py'.
-MAIN_PY_PATH="$SCRIPT_DIR/agent.py"
+MAIN_PY_PATH="$SCRIPT_DIR/src/agent.py"
 
 # Check if the main Python script exists.
 if [ ! -f "$MAIN_PY_PATH" ]; then
