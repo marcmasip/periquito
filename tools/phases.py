@@ -19,6 +19,8 @@ class Change(BaseModel):
 class Solution(BaseModel):
     explanation: str = Field(description="Detailed, step-by-step explanation of the changes.")
     changes: List[Change] = Field(description="List of search/replace blocks for code modification.")
+    request_files: List[str] | None = Field(default=None, description="Optional list of additional file paths to load in the next iteration if the current context is insufficient.")
+    next_phase_instructions: str | None = Field(default=None, description="Optional instructions for a subsequent phase if the task requires multiple steps.")
 
 # --- Prompts ---
 
@@ -66,6 +68,9 @@ The JSON patch should contain a list of changes, each with 'file', 'search', and
 'search' must be an exact match of the code to be replaced. If it's a new file, 'search' should be an empty string.
 'replace' is the new code.
 
+If you need more files to understand the context, provide their paths in 'request_files'.
+If the task requires a subsequent phase, provide instructions for it in 'next_phase_instructions'.
+
 User Request: {request}
 
 Context (selected file contents):
@@ -78,7 +83,7 @@ History of previous interactions:
 {history}
 ---
 
-Respond with a single JSON object containing 'explanation' and 'changes'.
+Respond with a single JSON object containing 'explanation', 'changes', and optionally 'request_files' and 'next_phase_instructions'.
 """
 
 # --- Phases ---

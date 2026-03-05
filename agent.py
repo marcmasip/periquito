@@ -130,80 +130,100 @@ def _get_feedback_for_iteration(solution) -> str | None:
         f"--- End of Previous Attempt ---\n"
     )
 
-def _handle_solution_loop(request: str, context: str, slug: str, auto_apply: bool, metrics: dict) -> tuple[str, str | None]:
+def _handle_solution_loop(request: str, context: str, slug: str, auto_apply: bool, metrics: dict) -> tuple[str, str | None, str | None]:
     """Generates and applies the solution, handling user interaction and retries."""
     p.say("Ruffling my feathers, eating some seeds, and thinking...")
     current_run_history = ""
-    MAX_RETRIES = 3
+    MAX_RETRIES = 5
     patch_path = None
     final_status = "error"
+    next_request = None
 
     for attempt in range(MAX_RETRIES):
         if attempt > 0:
-            p.info(f"\n🐦 Let's try again! I promise not to eat the bugs this time... (Attempt {attempt + 1}/{MAX_RETRIES})")
+            p.info(f"\n🐦 Let's try again! (Attempt {attempt + 1}/{MAX_RETRIES})")
 
         solution = phases.solve(request, context, current_run_history, tracer=metrics)
+
+        if getattr(solution, 'request_files', None):
+            p.sub_info(f"Agent requested additional files: {', '.join(solution.request_files)}")
+            new_context = phases.build_context(solution.request_files)
+            if new_context:
+                context += "\n\n" + new_context
+                current_run_history += f"\n--- Added to context ---\n{', '.join(solution.request_files)}\n"
+            else:
+                current_run_history += f"\n--- Agent requested files that do not exist or are empty ---\n{', '.join(solution.request_files)}\n"
+            continue
+
+        next_request = getattr(solution, 'next_phase_instructions', None)
 
         if not solution.changes:
             p.say("\nI've got a solution:")
             p.panel(solution.explanation, title="Explanation")
             final_status = "completed (explanation only)"
             patch_path = None
-            break
-
-        patch_path = _save_patch(slug, solution)
-        p.sub_info(f"Patch saved: {patch_path}")
-
-        user_choice = 'apply' if auto_apply else preview(patch_path)
-
-        if user_choice == 'apply':
-            if not apply(patch_path):
-                final_status = "applied with errors"
-                break
-
-            p.success("\n✨ All set! The changes are nested in your local files.")
-            confirm_commit = 'y' if auto_apply else p.ask("Test the changes. Do you want to commit them? (Y/n): ").lower()
-
-            if confirm_commit in ('', 'y', 'yes'):
-                _commit_changes(request, solution)
-                final_status = "applied and committed"
-                break
-            
-            p.warning("\nDiscarding applied changes as requested...")
-            files_to_restore = list(set([change['file'] for change in solution.model_dump()['changes']]))
-            _run_git_command(['restore'] + files_to_restore)
-
-            if attempt < MAX_RETRIES - 1:
-                feedback_report = _get_feedback_for_iteration(solution)
-                if feedback_report:
-                    current_run_history += feedback_report
-                    continue
-            
-            final_status = "skipped (max retries)" if attempt == MAX_RETRIES - 1 else "skipped"
-            break
-
-        elif user_choice == 'skip':
-            final_status = "skipped"
-            break
-        
-        elif user_choice == 'iterate' and not auto_apply:
-            if attempt < MAX_RETRIES - 1:
-                p.warning("\nDiscarding proposed changes...")
-                _run_git_command(['restore', '.']) # Reset any stray modifications
-                feedback_report = _get_feedback_for_iteration(solution)
-                if feedback_report:
-                    current_run_history += feedback_report
-                    continue
-            
-            final_status = "skipped (max retries)" if attempt == MAX_RETRIES - 1 else "skipped"
-            break
         else:
-            final_status = "skipped"
-            break
+            patch_path = _save_patch(slug, solution)
+            p.sub_info(f"Patch saved: {patch_path}")
+
+            user_choice = 'apply' if auto_apply else preview(patch_path)
+
+            if user_choice == 'apply':
+                if not apply(patch_path):
+                    final_status = "applied with errors"
+                    break
+
+                p.success("\n✨ All set! The changes are nested in your local files.")
+                confirm_commit = 'y' if auto_apply else p.ask("Test the changes. Do you want to commit them? (Y/n): ").lower()
+
+                if confirm_commit in ('', 'y', 'yes'):
+                    _commit_changes(request, solution)
+                    final_status = "applied and committed"
+                else:
+                    p.warning("\nDiscarding applied changes as requested...")
+                    files_to_restore = list(set([change['file'] for change in solution.model_dump()['changes']]))
+                    _run_git_command(['restore'] + files_to_restore)
+
+                    if attempt < MAX_RETRIES - 1:
+                        feedback_report = _get_feedback_for_iteration(solution)
+                        if feedback_report:
+                            current_run_history += feedback_report
+                            continue
+                    
+                    final_status = "skipped (max retries)" if attempt == MAX_RETRIES - 1 else "skipped"
+                    break
+
+            elif user_choice == 'skip':
+                final_status = "skipped"
+                break
+            
+            elif user_choice == 'iterate' and not auto_apply:
+                if attempt < MAX_RETRIES - 1:
+                    p.warning("\nDiscarding proposed changes...")
+                    _run_git_command(['restore', '.']) # Reset any stray modifications
+                    feedback_report = _get_feedback_for_iteration(solution)
+                    if feedback_report:
+                        current_run_history += feedback_report
+                        continue
+                
+                final_status = "skipped (max retries)" if attempt == MAX_RETRIES - 1 else "skipped"
+                break
+            else:
+                final_status = "skipped"
+                break
+
+        if next_request and final_status in ("applied and committed", "completed (explanation only)"):
+            p.info(f"\nAgent proposes a next phase:\n{next_request}")
+            if p.ask("Proceed with this next phase? (Y/n): ").lower() in ('', 'y', 'yes'):
+                return final_status, patch_path, next_request
+            else:
+                next_request = None
+
+        break
     else: # This 'else' on the for loop is for when the loop finishes without `break`.
         final_status = "skipped (max retries)"
 
-    return final_status, patch_path
+    return final_status, patch_path, next_request
 
 def _finalize_run(slug: str, start_run_time: float, metrics: dict, log_entries: list[str], result_message: str):
     """Saves logs and metrics, and prints KPIs to the console."""
@@ -246,12 +266,13 @@ def _finalize_run(slug: str, start_run_time: float, metrics: dict, log_entries: 
     p.sub_info(f"Log:     {log_path}")
     p.sub_info(f"Metrics: {metrics_path}")
 
-def run_once(request: str, history: str, auto_apply=False) -> str:
+def run_once(request: str, history: str, auto_apply=False) -> tuple[str, str | None]:
     start_run_time = time.time()
     slug = _slug(request)
     log_entries = [f"Request: {request}\n"]
     metrics = {'request': request, 'start_timestamp': start_run_time}
     result_message = f"Request: '{request}' | status: unknown"
+    next_request = None
 
     try:
         files, context = _gather_context(request, history, metrics)
@@ -259,7 +280,7 @@ def run_once(request: str, history: str, auto_apply=False) -> str:
         if not files or not context:
             result_message = f"Request: '{request}' | status: skipped (no files selected)"
         else:
-            final_status, patch_path = _handle_solution_loop(request, context, slug, auto_apply, metrics)
+            final_status, patch_path, next_request = _handle_solution_loop(request, context, slug, auto_apply, metrics)
             if patch_path:
                 result_message = f"Request: '{request}' | patch: {patch_path} | status: {final_status}"
             else:
@@ -274,7 +295,7 @@ def run_once(request: str, history: str, auto_apply=False) -> str:
     finally:
         _finalize_run(slug, start_run_time, metrics, log_entries, result_message)
 
-    return result_message
+    return result_message, next_request
 
 def main():
     os.makedirs(AGENT_DIR, exist_ok=True)
@@ -285,7 +306,9 @@ def main():
     # Single-shot mode: python agent.py "request"
     if len(sys.argv) > 1:
         req = ' '.join(sys.argv[1:])
-        history += run_once(req, history, auto_apply=False) + '\n'
+        while req:
+            res_msg, req = run_once(req, history, auto_apply=False)
+            history += res_msg + '\n'
         return
 
     while True:
@@ -295,7 +318,10 @@ def main():
             break
         if not request or request.lower() in ('exit', 'quit'):
             break
-        history += run_once(request, history) + '\n'
+        
+        while request:
+            res_msg, request = run_once(request, history)
+            history += res_msg + '\n'
 
 if __name__ == '__main__':
     main()
