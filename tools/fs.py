@@ -72,50 +72,91 @@ def get_gitignore_spec() -> pathspec.PathSpec:
     patterns.extend(['.git', '__pycache__', '.agent'])
     return pathspec.PathSpec.from_lines('gitwildmatch', patterns)
 
-def build_tree(folders: list[str]) -> str:
-    if not folders:
-        return "" # Return empty string if no folders are specified
+def build_tree(paths: list[str]) -> str:
+    if not paths:
+        return "" # Devuelve string vacío si no hay rutas
 
     spec = get_gitignore_spec()
-    tree_lines = []
+    
+    # 1. Estructura interna para almacenar el árbol (evita duplicados)
+    tree_dict = {}
 
-    for folder in folders:
-        if not os.path.isdir(folder):
-            if os.path.exists(folder) and not spec.match_file(folder):
-                tree_lines.append(folder)
+    def add_to_tree(filepath: str, is_file: bool):
+        # os.path.normpath limpia cosas como './carpeta' dejándolo en 'carpeta'
+        clean_path = os.path.normpath(filepath)
+        
+        if clean_path == '.':
+            return # Evitamos crear un nodo literal llamado '.'
+
+        parts = clean_path.split(os.sep)
+        current = tree_dict
+        
+        # Navegar y crear la estructura de carpetas necesaria
+        for part in parts[:-1]:
+            if part not in current or current[part] is None:
+                current[part] = {}
+            current = current[part]
+        
+        # Insertar el elemento final
+        last_part = parts[-1]
+        if is_file:
+            current[last_part] = None # None indica que es un archivo
+        else:
+            if last_part not in current or current[last_part] is None:
+                current[last_part] = {} # {} indica que es una carpeta
+
+    # 2. Recorrer las rutas de entrada y poblar el diccionario
+    for path in paths:
+        if not os.path.exists(path) or spec.match_file(path):
             continue
 
-        # Special handling for '.', which should not be listed as a folder
-        # and its contents should not be indented at the top level.
-        is_root_scan = (folder == '.')
+        if os.path.isfile(path):
+            add_to_tree(path, is_file=True)
+        elif os.path.isdir(path):
+            add_to_tree(path, is_file=False)
 
-        if not is_root_scan:
-            tree_lines.append(f"{folder}/")
+            for root, dirs, files in os.walk(path, topdown=True):
+                # Filtrar carpetas ignoradas (modificando la lista in-place para os.walk)
+                dirs[:] = [d for d in dirs if not spec.match_file(os.path.join(root, d))]
+                
+                if spec.match_file(root):
+                    continue
+
+                # Añadir las carpetas al árbol
+                for d in dirs:
+                    dir_path = os.path.join(root, d)
+                    add_to_tree(dir_path, is_file=False)
+
+                # Añadir los archivos al árbol
+                for f in files:
+                    file_path = os.path.join(root, f)
+                    if not spec.match_file(file_path):
+                        add_to_tree(file_path, is_file=True)
+
+    # 3. Generar el texto visual del árbol con caracteres especiales
+    def render(node: dict, prefix: str = "") -> list[str]:
+        lines = []
+        # Ordenamos las claves alfabéticamente para un resultado predecible
+        keys = sorted(node.keys())
         
-        for root, dirs, files in os.walk(folder, topdown=True):
-            # Filter ignored directories
-            dirs[:] = [d for d in dirs if not spec.match_file(os.path.join(root, d))]
+        for i, key in enumerate(keys):
+            is_last = (i == len(keys) - 1)
+            is_dir = node[key] is not None
             
-            if spec.match_file(root):
-                continue
+            # Caracteres de árbol típicos
+            connector = "└── " if is_last else "├── "
+            display_name = f"{key}/" if is_dir else key
+            
+            lines.append(f"{prefix}{connector}{display_name}")
+            
+            # Si es carpeta, procesamos sus hijos recursivamente
+            if is_dir:
+                extension = "    " if is_last else "│   "
+                lines.extend(render(node[key], prefix + extension))
+                
+        return lines
 
-            # Calculate indentation level
-            path_from_start = os.path.relpath(root, folder)
-            if path_from_start == '.':
-                level = 0
-            else:
-                level = len(path_from_start.split(os.sep))
-
-            # If scanning root '.', indent from level 0. Otherwise, indent under the folder name.
-            base_indent_level = 0 if is_root_scan else 1
-            indent = '  ' * (level + base_indent_level)
-
-            for f in files:
-                file_path = os.path.join(root, f)
-                if not spec.match_file(file_path):
-                    tree_lines.append(f"{indent}{f}")
-    
-    return "\n".join(tree_lines)
+    return "\n".join(render(tree_dict))
 
 def read_files_as_context(filenames: list[str]) -> str:
     context = []

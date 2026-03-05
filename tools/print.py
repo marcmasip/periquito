@@ -10,6 +10,7 @@ class Ansi:
     RED = "\033[31m"
     GREEN = "\033[32m"
     YELLOW = "\033[33m"
+    DARK_GRAY = "\033[90m"
     BLUE = "\033[34m"
     MAGENTA = "\033[35m"
     CYAN = "\033[36m"
@@ -22,6 +23,14 @@ def _colored_print(emoji: str, color: str, message: str, **kwargs):
     """Generic print function with emoji and color."""
     print(f"{emoji} {color}{message}{Ansi.RESET}", **kwargs)
 
+def say(message: str, **kwargs):
+    """Prints a message from the agent"""
+    print(f"\n🦜  {Ansi.DARK_GRAY}__/{Ansi.RESET}  {Ansi.BOLD}{message}{Ansi.RESET} {Ansi.DARK_GRAY}/{Ansi.RESET} ", **kwargs)
+
+def wisp(message: str, **kwargs):
+    """Prints whisp"""
+    print(f"\n{Ansi.DARK_GRAY}{message}{Ansi.RESET} ", **kwargs)
+	
 def header(message: str, **kwargs):
     """Prints a bold, bright magenta header."""
     print(f"\n{Ansi.BOLD}{Ansi.BRIGHT_MAGENTA}{message}{Ansi.RESET}", **kwargs)

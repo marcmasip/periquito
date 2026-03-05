@@ -78,17 +78,17 @@ def _gather_context(request: str, history: str, metrics: dict) -> tuple[list[str
             file_tree = prospective_tree
     
     if folders is None: # Fallback for large projects or if protocol has no folders
-        p.header("1. 🗺️  Exploring folders...")
+        p.say("Exploring folders...")
         folders = phases.explore_folders(request, protocol, history, tracer=metrics)
     
     p.sub_info(f"Selected: {', '.join(folders) if folders else 'none'}")
 
-    p.header("2. 🌳 Building file tree...")
+    p.sub_info("Building file tree...")
     if file_tree is None:
         file_tree = fs.build_tree(folders)
     p.panel(file_tree)
 
-    p.header("3. 🎯 Selecting files...")
+    p.say("Picking files ...")
     files = phases.select_files(request, file_tree, history, tracer=metrics)
     p.sub_info(f"Selected: {', '.join(files) if files else 'none'}")
     
@@ -96,7 +96,6 @@ def _gather_context(request: str, history: str, metrics: dict) -> tuple[list[str
         p.warning("No files selected. Cannot proceed.")
         return None, None
 
-    p.header("4. 📖 Reading files...")
     context = phases.build_context(files)
     lines_read = sum(int(c) for c in re.findall(r'\((\d+) lines\)', context))
     p.sub_info(f"Read {len(files)} files ({lines_read} lines) into context.")
@@ -279,8 +278,9 @@ def run_once(request: str, history: str, auto_apply=False) -> str:
 
 def main():
     os.makedirs(AGENT_DIR, exist_ok=True)
-    p.header("🤖 Dev Agent ready.  (exit / quit to stop)")
-
+    p.wisp("Periquito the lightweight Gemini code agent is here!  (exit / quit to stop)")
+    p.say("Hi!")
+    p.header("")
     history = ''
     # Single-shot mode: python agent.py "request"
     if len(sys.argv) > 1:
