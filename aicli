@@ -1,0 +1,35 @@
+#!/bin/bash
+
+# This script is a wrapper that executes the main Python application.
+# It handles locating the script, activating a virtual environment if present,
+# and passing along all command-line arguments.
+
+set -e # Exit immediately if a command exits with a non-zero status.
+
+# Get the absolute path of the directory where this script is located.
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+# Define the path to the main Python application script.
+# Assumes the main script is located at 'src/main.py'.
+MAIN_PY_PATH="$SCRIPT_DIR/src/main.py"
+
+# Check if the main Python script exists.
+if [ ! -f "$MAIN_PY_PATH" ]; then
+    echo "Error: Main application script not found at $MAIN_PY_PATH"
+    exit 1
+fi
+
+# Define the path to the virtual environment's Python interpreter.
+VENV_PYTHON="$SCRIPT_DIR/venv/bin/python"
+
+# Check if a virtual environment exists at the expected location.
+# If it does, use its Python interpreter to run the script.
+# This ensures that the correct dependencies are used.
+# Otherwise, fall back to the system's 'python3'.
+if [ -f "$VENV_PYTHON" ]; then
+    "$VENV_PYTHON" "$MAIN_PY_PATH" "$@"
+else
+    # If no venv is found, use the python3 command from the system's PATH.
+    # This assumes that dependencies are installed globally or in a user environment.
+    python3 "$MAIN_PY_PATH" "$@"
+fi
