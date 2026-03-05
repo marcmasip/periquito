@@ -33,6 +33,13 @@ def _load_config():
         except (json.JSONDecodeError, IOError) as e:
             print(f"Warning: Could not load or parse config.json. Using default settings. Error: {e}")
 
+    # Resolve template paths to be relative to the project root, so it works when imported
+    project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    if 'prompt_templates' in config_data and isinstance(config_data['prompt_templates'], dict):
+        for key, template_path in config_data['prompt_templates'].items():
+            if isinstance(template_path, str) and not os.path.isabs(template_path):
+                config_data['prompt_templates'][key] = os.path.join(project_root, template_path)
+
     return SimpleNamespace(**config_data)
 
 # Load config once on module import
