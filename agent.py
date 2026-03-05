@@ -61,166 +61,204 @@ def _run_git_command(command):
         print("Error: 'git' command not found. Is git installed and in your PATH?")
         return False
 
+def _gather_context(request: str, history: str, metrics: dict) -> tuple[list[str] | None, str | None]:
+    """Gathers context for the agent to work on by selecting folders and files."""
+    protocol = fs.read_protocol()
+
+    # Step 1: Determine folders to scan. For small projects, use all folders from protocol.
+    all_protocol_folders = fs.parse_folders_from_protocol(protocol)
+    folders = None
+    file_tree = None
+
+    if all_protocol_folders:
+        prospective_tree = fs.build_tree(all_protocol_folders)
+        if len(prospective_tree.splitlines()) < 150:
+            print("\n1. 🗺️  Small project tree detected, using all protocol folders.")
+            folders = all_protocol_folders
+            file_tree = prospective_tree
+    
+    if folders is None: # Fallback for large projects or if protocol has no folders
+        print("\n1. 🗺️  Exploring folders...")
+        folders = phases.explore_folders(request, protocol, history, tracer=metrics)
+    
+    print(f"  > Selected: {', '.join(folders) if folders else 'none'}")
+
+    print("\n2. 🌳 Building file tree...")
+    if file_tree is None:
+        file_tree = fs.build_tree(folders)
+    print(f"---\n{file_tree}\n---")
+
+    print("\n3. 🎯 Selecting files...")
+    files = phases.select_files(request, file_tree, history, tracer=metrics)
+    print(f"  > Selected: {', '.join(files) if files else 'none'}")
+    
+    if not files:
+        print("  > No files selected. Cannot proceed.")
+        return None, None
+
+    print("\n4. 📖 Reading files...")
+    context = phases.build_context(files)
+    lines_read = sum(int(c) for c in re.findall(r'\((\d+) lines\)', context))
+    print(f"  > Read {len(files)} files ({lines_read} lines) into context.")
+
+    return files, context
+
+def _commit_changes(request: str, solution):
+    """Commits the applied changes to git."""
+    print("  > Committing changes via git...")
+    files_to_add = list(set([change['file'] for change in solution.model_dump()['changes']]))
+    _run_git_command(['add'] + files_to_add)
+
+    commit_message = f"feat: {request}"
+    if len(commit_message) > 72:
+        commit_message = commit_message[:69] + "..."
+
+    _run_git_command(['commit', '-m', commit_message])
+
+def _get_feedback_for_iteration(solution) -> str | None:
+    """Prompts the user for feedback and constructs a report for the next iteration."""
+    feedback = input("\n📝 Please describe the issue with the patch to help me improve it: ").strip()
+    if not feedback:
+        print("No feedback provided. Skipping changes.")
+        return None
+
+    return (
+        f"\n\n--- Previous Attempt (Failed) ---\n"
+        f"I generated the following patch, but it was incorrect.\n"
+        f"Explanation:\n{solution.explanation}\n"
+        f"Patch:\n{json.dumps(solution.model_dump()['changes'], indent=2)}\n"
+        f"User Feedback on Failure: '{feedback}'\n"
+        f"--- End of Previous Attempt ---\n"
+    )
+
+def _handle_solution_loop(request: str, context: str, slug: str, auto_apply: bool, metrics: dict) -> tuple[str, str | None]:
+    """Generates and applies the solution, handling user interaction and retries."""
+    print("\n5. 🧠 Generating solution...")
+    current_run_history = ""
+    MAX_RETRIES = 3
+    patch_path = None
+    final_status = "error"
+
+    for attempt in range(MAX_RETRIES):
+        if attempt > 0:
+            print(f"\n  > Retrying solution... (Attempt {attempt + 1}/{MAX_RETRIES})")
+
+        solution = phases.solve(request, context, current_run_history, tracer=metrics)
+
+        if not solution.changes:
+            print(f"\n---\n{solution.explanation}\n---")
+            final_status = "completed (explanation only)"
+            patch_path = None
+            break
+
+        patch_path = _save_patch(slug, solution)
+        print(f"\n  > Patch saved: {patch_path}")
+
+        user_choice = 'apply' if auto_apply else preview(patch_path)
+
+        if user_choice == 'apply':
+            if not apply(patch_path):
+                final_status = "applied with errors"
+                break
+
+            print("\n✅ Changes have been applied to your local files.")
+            confirm_commit = 'y' if auto_apply else input("  > Test the changes. Do you want to commit them? (Y/n): ").strip().lower()
+
+            if confirm_commit in ('', 'y', 'yes'):
+                _commit_changes(request, solution)
+                final_status = "applied and committed"
+                break
+            
+            print("\nDiscarding applied changes as requested...")
+            files_to_restore = list(set([change['file'] for change in solution.model_dump()['changes']]))
+            _run_git_command(['restore'] + files_to_restore)
+
+            if attempt < MAX_RETRIES - 1:
+                feedback_report = _get_feedback_for_iteration(solution)
+                if feedback_report:
+                    current_run_history += feedback_report
+                    continue
+            
+            final_status = "skipped (max retries)" if attempt == MAX_RETRIES - 1 else "skipped"
+            break
+
+        elif user_choice == 'skip':
+            final_status = "skipped"
+            break
+        
+        elif user_choice == 'iterate' and not auto_apply:
+            if attempt < MAX_RETRIES - 1:
+                print("\nDiscarding proposed changes...")
+                _run_git_command(['restore', '.']) # Reset any stray modifications
+                feedback_report = _get_feedback_for_iteration(solution)
+                if feedback_report:
+                    current_run_history += feedback_report
+                    continue
+            
+            final_status = "skipped (max retries)" if attempt == MAX_RETRIES - 1 else "skipped"
+            break
+        else:
+            final_status = "skipped"
+            break
+    else: # This 'else' on the for loop is for when the loop finishes without `break`.
+        final_status = "skipped (max retries)"
+
+    return final_status, patch_path
+
+def _finalize_run(slug: str, start_run_time: float, metrics: dict, log_entries: list[str], result_message: str):
+    """Saves logs and metrics, and prints KPIs to the console."""
+    end_run_time = time.time()
+    metrics['end_timestamp'] = end_run_time
+    metrics['total_run_duration'] = end_run_time - start_run_time
+    metrics['result_message'] = result_message
+
+    if metrics.get('prompts'):
+        log_entries.append("\n\n--- Prompts Used ---")
+        for phase, prompt_list in metrics['prompts'].items():
+            for i, prompt_content in enumerate(prompt_list):
+                log_entries.append(f"\n--- Prompt for '{phase}' (call #{i+1}) ---")
+                log_entries.append(prompt_content)
+                log_entries.append(f"--- End Prompt for '{phase}' (call #{i+1}) ---")
+        log_entries.append("--------------------​")
+
+    kpi_lines = [
+        "\n--- KPIs ---",
+        f"Total Run Time: {metrics.get('total_run_duration', 0):.2f} seconds",
+        f"LLM Calls: {metrics.get('llm_calls_count', 0)}",
+        f"LLM Total Duration: {metrics.get('llm_total_duration', 0):.2f} seconds",
+        f"LLM Total Prompt Tokens: {metrics.get('llm_total_prompt_tokens', 0)}",
+        f"LLM Total Candidates Tokens: {metrics.get('llm_total_candidates_tokens', 0)}",
+        f"LLM Total Tokens: {metrics.get('llm_total_tokens', 0)}",
+        f"Phase 'explore_folders' Duration: {metrics.get('phase_explore_folders_duration', 0):.2f} seconds",
+        f"Phase 'select_files' Duration: {metrics.get('phase_select_files_duration', 0):.2f} seconds",
+        f"Phase 'solve' Duration: {metrics.get('phase_solve_duration', 0):.2f} seconds",
+        "------------"
+    ]
+    log_entries.extend(kpi_lines)
+    log_entries.append(f"Result message: {result_message}")
+    log_content = "\n".join(log_entries)
+    log_path = _save_log(slug, log_content)
+    metrics_path = _save_metrics(slug, metrics)
+
+    print("\n".join(kpi_lines))
+    print(f"\n🏁 Session finished.")
+    print(f"  > Log:     {log_path}")
+    print(f"  > Metrics: {metrics_path}")
+
 def run_once(request: str, history: str, auto_apply=False) -> str:
     start_run_time = time.time()
-
     slug = _slug(request)
-    result_message = ""
-    log_entries = []
-    metrics = {
-        'request': request,
-        'start_timestamp': start_run_time
-    }
-
-    log_entries.append(f"Request: {request}\n")
+    log_entries = [f"Request: {request}\n"]
+    metrics = {'request': request, 'start_timestamp': start_run_time}
+    result_message = f"Request: '{request}' | status: unknown"
 
     try:
-        protocol = fs.read_protocol()
+        files, context = _gather_context(request, history, metrics)
 
-        # Step 1: Determine folders to scan. For small projects, use all folders from protocol.
-        all_protocol_folders = fs.parse_folders_from_protocol(protocol)
-        folders = None
-        file_tree = None
-
-        if all_protocol_folders:
-            prospective_tree = fs.build_tree(all_protocol_folders)
-            if len(prospective_tree.splitlines()) < 150:
-                print("\n1. 🗺️  Small project tree detected, using all protocol folders.")
-                folders = all_protocol_folders
-                file_tree = prospective_tree
-        
-        if folders is None: # Fallback for large projects or if protocol has no folders
-            print("\n1. 🗺️  Exploring folders...")
-            folders = phases.explore_folders(request, protocol, history, tracer=metrics)
-        
-        print(f"  > Selected: {', '.join(folders) if folders else 'none'}")
-
-        print("\n2. 🌳 Building file tree...")
-        if file_tree is None:
-            file_tree = fs.build_tree(folders)
-        print(f"---\n{file_tree}\n---")
-
-        print("\n3. 🎯 Selecting files...")
-        files = phases.select_files(request, file_tree, history, tracer=metrics)
-        print(f"  > Selected: {', '.join(files) if files else 'none'}")
-        if not files:
-            print("  > No files selected. Cannot proceed.")
+        if not files or not context:
             result_message = f"Request: '{request}' | status: skipped (no files selected)"
         else:
-            print("\n4. 📖 Reading files...")
-            context = phases.build_context(files)
-            lines_read = sum(int(c) for c in re.findall(r'\((\d+) lines\)', context))
-            print(f"  > Read {len(files)} files ({lines_read} lines) into context.")
-
-            print("\n5. 🧠 Generating solution...")
-            current_run_history = "" # Start with a clean slate for solve phase
-            MAX_RETRIES = 3
-            final_status = "error"
-            patch_path = None
-
-            for attempt in range(MAX_RETRIES):
-                if attempt > 0:
-                    print(f"\n  > Retrying solution... (Attempt {attempt + 1}/{MAX_RETRIES})")
-
-                solution = phases.solve(request, context, current_run_history, tracer=metrics)
-
-                if not solution.changes:
-                    print(f"\n---\n{solution.explanation}\n---")
-                    final_status = "completed (explanation only)"
-                    patch_path = None # Ensure patch_path is None
-                    break # Exit the retry loop for explanation-only responses
-
-                patch_path = _save_patch(slug, solution)
-                print(f"\n  > Patch saved: {patch_path}")
-
-                user_choice = 'apply' if auto_apply else preview(patch_path)
-
-                if user_choice == 'apply':
-                    ok = apply(patch_path)
-                    if not ok:
-                        final_status = "applied with errors"
-                        break # apply() already handled printing errors and restoring files
-
-                    # Changes applied, now confirm with user
-                    print("\n✅ Changes have been applied to your local files.")
-                    
-                    confirm_commit = 'y' # Default to 'yes' for auto_apply
-                    if not auto_apply:
-                        confirm_commit = input("  > Test the changes. Do you want to commit them? (Y/n): ").strip().lower()
-
-                    if confirm_commit in ('', 'y', 'yes'):
-                        print("  > Committing changes via git...")
-                        files_to_add = list(set([change['file'] for change in solution.model_dump()['changes']]))
-                        _run_git_command(['add'] + files_to_add)
-
-                        commit_message = f"feat: {request}"
-                        if len(commit_message) > 72:
-                           commit_message = commit_message[:69] + "..."
-
-                        _run_git_command(['commit', '-m', commit_message])
-                        final_status = "applied and committed"
-                        break # Success, exit the loop
-                    
-                    # User said 'n', so we revert and iterate.
-                    print("\nDiscarding applied changes as requested...")
-                    files_to_restore = list(set([change['file'] for change in solution.model_dump()['changes']]))
-                    _run_git_command(['restore'] + files_to_restore)
-
-                    if attempt < MAX_RETRIES - 1:
-                        feedback = input("\n📝 Please describe the issue with the patch to help me improve it: ").strip()
-                        if not feedback:
-                            print("No feedback provided. Skipping changes.")
-                            final_status = "skipped"
-                            break
-
-                        failed_attempt_report = (
-                            f"\n\n--- Previous Attempt (Failed) ---\n"
-                            f"I generated a patch that was applied but was incorrect.\n"
-                            f"Explanation:\n{solution.explanation}\n"
-                            f"Patch:\n{json.dumps(solution.model_dump()['changes'], indent=2)}\n"
-                            f"User Feedback on Failure: '{feedback}'\n"
-                            f"--- End of Previous Attempt ---\n"
-                        )
-                        current_run_history += failed_attempt_report
-                        continue # Go to next iteration of the loop
-                    else:
-                        print("\n❌ Maximum number of retries reached.")
-                        final_status = "skipped (max retries)"
-                        break
-                elif user_choice == 'skip':
-                    final_status = "skipped"
-                    break
-                elif user_choice == 'iterate' and not auto_apply:
-                    if attempt < MAX_RETRIES - 1:
-                        print("\nDiscarding proposed changes...")
-                        _run_git_command(['restore', '.']) # Reset any stray modifications
-
-                        feedback = input("\n📝 Please describe the issue with the patch to help me improve it: ").strip()
-                        if not feedback:
-                            print("No feedback provided. Skipping changes.")
-                            final_status = "skipped"
-                            break
-
-                        failed_attempt_report = (
-                            f"\n\n--- Previous Attempt (Failed) ---\n"
-                            f"I generated the following patch, but it was incorrect.\n"
-                            f"Explanation:\n{solution.explanation}\n"
-                            f"Patch:\n{json.dumps(solution.model_dump()['changes'], indent=2)}\n"
-                            f"User Feedback on Failure: '{feedback}'\n"
-                            f"--- End of Previous Attempt ---\n"
-                        )
-                        current_run_history += failed_attempt_report
-                        continue # Go to next iteration of the loop
-                    else:
-                        print("\n❌ Maximum number of retries reached.")
-                        final_status = "skipped (max retries)"
-                        break
-                else: # Fallback or auto_apply with iterate (which we block)
-                    final_status = "skipped"
-                    break
-            else: # This 'else' on the for loop is for when the loop finishes without `break`.
-                final_status = "skipped (max retries)"
-
+            final_status, patch_path = _handle_solution_loop(request, context, slug, auto_apply, metrics)
             if patch_path:
                 result_message = f"Request: '{request}' | patch: {patch_path} | status: {final_status}"
             else:
@@ -230,49 +268,10 @@ def run_once(request: str, history: str, auto_apply=False) -> str:
         print(f"\n❌ An unexpected error occurred during execution: {e}")
         import traceback
         traceback.print_exc()
-        log_entries.append(f"\n❌ An unexpected error occurred during execution: {e}\n")
-        log_entries.append(traceback.format_exc())
+        log_entries.append(f"\n❌ An unexpected error occurred: {e}\n{traceback.format_exc()}")
         result_message = f"Request: '{request}' | status: error ({type(e).__name__})"
     finally:
-        end_run_time = time.time()
-        metrics['end_timestamp'] = end_run_time
-        metrics['total_run_duration'] = end_run_time - start_run_time
-        metrics['result_message'] = result_message # Add final message to metrics
-
-        # Add prompts to log
-        if metrics.get('prompts'):
-            log_entries.append("\n\n--- Prompts Used ---")
-            for phase, prompt_list in metrics['prompts'].items():
-                for i, prompt_content in enumerate(prompt_list):
-                    log_entries.append(f"\n--- Prompt for '{phase}' (call #{i+1}) ---")
-                    log_entries.append(prompt_content)
-                    log_entries.append(f"--- End Prompt for '{phase}' (call #{i+1}) ---")
-            log_entries.append("--------------------​")
-
-        # Format and append KPIs to log_entries and print
-        kpi_lines = [
-            "\n--- KPIs ---",
-            f"Total Run Time: {metrics.get('total_run_duration', 0):.2f} seconds",
-            f"LLM Calls: {metrics.get('llm_calls_count', 0)}",
-            f"LLM Total Duration: {metrics.get('llm_total_duration', 0):.2f} seconds",
-            f"LLM Total Prompt Tokens: {metrics.get('llm_total_prompt_tokens', 0)}",
-            f"LLM Total Candidates Tokens: {metrics.get('llm_total_candidates_tokens', 0)}",
-            f"LLM Total Tokens: {metrics.get('llm_total_tokens', 0)}",
-            f"Phase 'explore_folders' Duration: {metrics.get('phase_explore_folders_duration', 0):.2f} seconds",
-            f"Phase 'select_files' Duration: {metrics.get('phase_select_files_duration', 0):.2f} seconds",
-            f"Phase 'solve' Duration: {metrics.get('phase_solve_duration', 0):.2f} seconds",
-            "------------"
-        ]
-        log_entries.extend(kpi_lines)
-        log_entries.append(f"Result message: {result_message}")
-        log_content = "\n".join(log_entries)
-        log_path = _save_log(slug, log_content)
-        metrics_path = _save_metrics(slug, metrics)
-
-        print("\n".join(kpi_lines))
-        print(f"\n🏁 Session finished.")
-        print(f"  > Log:     {log_path}")
-        print(f"  > Metrics: {metrics_path}")
+        _finalize_run(slug, start_run_time, metrics, log_entries, result_message)
 
     return result_message
 
