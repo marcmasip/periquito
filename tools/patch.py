@@ -83,7 +83,7 @@ def preview(patch_path: str) -> str:
         print("  <number> : View detailed diff for a specific change.")
         print("  'a'      : Proceed to apply changes (default).")
         print("  's'      : Skip applying changes.")
-        print("  'r'      : Report an issue and retry generation.")
+        print("  'i'      : Report an issue and iterate/retry generation.")
         print("  'q'      : Quit and skip applying changes.")
 
         choice = input("\nEnter your choice (a): ").strip().lower()
@@ -94,8 +94,8 @@ def preview(patch_path: str) -> str:
         elif choice == 's' or choice == 'q':
             print("\nSkipping changes as requested.")
             return 'skip'
-        elif choice == 'r':
-            return 'retry'
+        elif choice == 'i' or choice == 'r':
+            return 'iterate'
 
         try:
             selected_display_idx = int(choice)

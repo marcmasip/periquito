@@ -116,7 +116,7 @@ def _commit_changes(request: str, solution):
 
 def _get_feedback_for_iteration(solution) -> str | None:
     """Prompts the user for feedback and constructs a report for the next iteration."""
-    feedback = p.ask("\n📝 Please describe the issue with the patch to help me improve it: ")
+    feedback = p.ask("\n📝 ¡Pío, pío! Please describe what went wrong so I can fix it: ")
     if not feedback:
         p.warning("No feedback provided. Skipping changes.")
         return None
@@ -132,7 +132,7 @@ def _get_feedback_for_iteration(solution) -> str | None:
 
 def _handle_solution_loop(request: str, context: str, slug: str, auto_apply: bool, metrics: dict) -> tuple[str, str | None]:
     """Generates and applies the solution, handling user interaction and retries."""
-    p.say("Ruffling my feathers and thinking...")
+    p.say("Ruffling my feathers, eating some seeds, and thinking...")
     current_run_history = ""
     MAX_RETRIES = 3
     patch_path = None
@@ -140,7 +140,7 @@ def _handle_solution_loop(request: str, context: str, slug: str, auto_apply: boo
 
     for attempt in range(MAX_RETRIES):
         if attempt > 0:
-            p.info(f"\nRetrying solution... (Attempt {attempt + 1}/{MAX_RETRIES})")
+            p.info(f"\n🐦 Let's try again! I promise not to eat the bugs this time... (Attempt {attempt + 1}/{MAX_RETRIES})")
 
         solution = phases.solve(request, context, current_run_history, tracer=metrics)
 
@@ -242,7 +242,7 @@ def _finalize_run(slug: str, start_run_time: float, metrics: dict, log_entries: 
 
     print()
     p.panel("\n".join(kpi_lines[1:-1]), title="KPIs")
-    p.success(f"\n🏁 Flight complete! Ready for the next adventure.")
+    p.success(f"\n🏁 Flight complete! The bird has landed. Ready for the next adventure.")
     p.sub_info(f"Log:     {log_path}")
     p.sub_info(f"Metrics: {metrics_path}")
 
@@ -278,7 +278,7 @@ def run_once(request: str, history: str, auto_apply=False) -> str:
 
 def main():
     os.makedirs(AGENT_DIR, exist_ok=True)
-    p.wisp("🐦 Periquito, your agile coding assistant, at your service! (type exit/quit to stop)")
+    p.wisp("🐦 Periquito, your small but mighty (pequeño pero matón) coding assistant! (type exit/quit to stop)")
     p.say("¡Chirp! What can I code for you today?")
     p.header("")
     history = ''
