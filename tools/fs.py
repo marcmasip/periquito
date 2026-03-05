@@ -84,9 +84,13 @@ def build_tree(folders: list[str]) -> str:
             if os.path.exists(folder) and not spec.match_file(folder):
                 tree_lines.append(folder)
             continue
-        
-        # Add the folder name itself
-        tree_lines.append(f"{folder}/")
+
+        # Special handling for '.', which should not be listed as a folder
+        # and its contents should not be indented at the top level.
+        is_root_scan = (folder == '.')
+
+        if not is_root_scan:
+            tree_lines.append(f"{folder}/")
         
         for root, dirs, files in os.walk(folder, topdown=True):
             # Filter ignored directories
@@ -102,7 +106,9 @@ def build_tree(folders: list[str]) -> str:
             else:
                 level = len(path_from_start.split(os.sep))
 
-            indent = '  ' * (level + 1)
+            # If scanning root '.', indent from level 0. Otherwise, indent under the folder name.
+            base_indent_level = 0 if is_root_scan else 1
+            indent = '  ' * (level + base_indent_level)
 
             for f in files:
                 file_path = os.path.join(root, f)
