@@ -90,6 +90,15 @@ def _gather_context(request: str, history: str, metrics: dict) -> tuple[list[str
 
     p.say("Picking the most interesting files...")
     files = phases.select_files(request, file_tree, history, tracer=metrics)
+    
+    valid_files = []
+    for f in files:
+        if os.path.isfile(f):
+            valid_files.append(f)
+        else:
+            p.warning(f"Skipping invalid or non-existent file: {f}")
+    files = valid_files
+
     p.sub_info(f"Selected: {', '.join(files) if files else 'none'}")
     
     if not files:

@@ -9,7 +9,7 @@ class FolderList(BaseModel):
     folders: List[str] = Field(description="List of folder paths relevant to the user's request. Should include './' for root-level files.")
 
 class FileList(BaseModel):
-    files: List[str] = Field(description="List of file paths relevant for generating the solution.")
+    files: List[str] = Field(description="List of file paths relevant for generating the solution. Must be exact paths from the file tree.")
 
 class Change(BaseModel):
     file: str
