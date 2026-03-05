@@ -319,9 +319,24 @@ def _finalize_run(slug: str, start_run_time: float, metrics: dict, log_entries: 
     log_path = _save_log(slug, log_content)
     metrics_path = _save_metrics(slug, metrics)
 
+    # Compact KPI for console output
+    total_t = metrics.get('total_run_duration', 0)
+    explore_t = metrics.get('phase_explore_folders_duration', 0)
+    select_t = metrics.get('phase_select_files_duration', 0)
+    solve_t = metrics.get('phase_solve_duration', 0)
+    calls = metrics.get('llm_calls_count', 0)
+    llm_t = metrics.get('llm_total_duration', 0)
+    p_tokens = metrics.get('llm_total_prompt_tokens', 0)
+    c_tokens = metrics.get('llm_total_candidates_tokens', 0)
+    total_tokens = metrics.get('llm_total_tokens', 0)
+
+    kpi_summary = f"⏱️  Total: {total_t:.1f}s (explore: {explore_t:.1f}s, select: {select_t:.1f}s, solve: {solve_t:.1f}s)"
+    if calls > 0:
+        kpi_summary += f"\n🧠 LLM: {calls} calls, {llm_t:.1f}s, {p_tokens}+{c_tokens}={total_tokens} tokens"
+
     print()
-    p.panel("\n".join(kpi_lines[1:-1]), title="KPIs")
-    p.say(f" Adios me voy 🕊")
+    p.panel(kpi_summary, title="KPIs")
+    p.say(f" Adios me voy 🪽  ")
     p.sub_info(f"Log:     {log_path}")
     p.sub_info(f"Metrics: {metrics_path}")
 
