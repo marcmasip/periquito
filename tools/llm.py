@@ -18,6 +18,20 @@ except KeyError:
 MODEL_NAME_DEFAULT = "gemini-2.5-flash"
 MODEL_NAME_ADVANCED = "gemini-2.5-pro"
 
+# Global cache for GenerativeModel instances to avoid re-creation
+_MODEL_CACHE = {}
+
+def _get_model(model_name: str, system_instruction: str) -> genai.GenerativeModel:
+    """Gets a GenerativeModel instance from cache or creates a new one."""
+    key = (model_name, system_instruction)
+    if key not in _MODEL_CACHE:
+        _MODEL_CACHE[key] = genai.GenerativeModel(
+            model_name,
+            generation_config={"response_mime_type": "application/json"},
+            system_instruction=system_instruction
+        )
+    return _MODEL_CACHE[key]
+
 def _log_llm_progress(phase_name: str, model_name: str, duration: float, prompt_tokens: int, candidates_tokens: int, total_tokens: int):
     """Logs LLM call details to stdout."""
     # Example:   > LLM 'solve' (gemini-1.5-pro): 5.23s, 2450 tokens
@@ -38,11 +52,8 @@ def generate_json(prompt: str, pydantic_model: BaseModel, tracer: dict = None, m
             tracer['prompts'][phase_name] = []
         tracer['prompts'][phase_name].append(prompt)
 
-    model = genai.GenerativeModel(
-        model_name,
-        generation_config={"response_mime_type": "application/json"},
-        system_instruction=f"You are a helpful assistant. Respond in JSON format that adheres to this Pydantic schema: {pydantic_model.model_json_schema()}"
-    )
+    system_instruction = f"You are a helpful assistant. Respond in JSON format that adheres to this Pydantic schema: {pydantic_model.model_json_schema()}"
+    model = _get_model(model_name, system_instruction)
 
     start_time = time.time()
     try:
