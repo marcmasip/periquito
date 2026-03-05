@@ -48,15 +48,21 @@ def read_protocol() -> str:
     return f"No 'Project Structure' section found in README. Using a file listing summary to guide folder exploration:\n\n---\n{summary}\n---"
 
 def parse_folders_from_protocol(protocol_content: str) -> list[str]:
-    """Extracts folder paths (ending with '/') from the protocol text."""
-    # This regex finds path-like strings that end with a slash.
-    folders = re.findall(r'([a-zA-Z0-9_./-]+/)', protocol_content)
-    
-    # Filter for actual, existing directories and remove duplicates
-    unique_folders = sorted(list(set(
-        f for f in folders if os.path.isdir(os.path.normpath(f))
+    """
+    Extracts folder and file paths from a markdown list in the protocol text.
+    It looks for lines starting with '-' and expects a format like:
+    - <path> : <optional notes>
+    It accepts both files and folders that exist on the filesystem.
+    """
+    # Regex to find lines starting with a markdown list item ('-')
+    # and capture the path that comes before an optional ':'
+    paths = re.findall(r'^\s*-\s*([^:\n]+)', protocol_content, re.MULTILINE)
+
+    # Clean up, check for existence, and remove duplicates
+    unique_paths = sorted(list(set(
+        p.strip() for p in paths if os.path.exists(p.strip())
     )))
-    return unique_folders
+    return unique_paths
 
 def get_gitignore_spec() -> pathspec.PathSpec:
     patterns = []
