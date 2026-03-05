@@ -20,7 +20,7 @@ def preview(patch_path: str) -> str:
     and returns 'apply', 'skip', or 'retry' based on user input.
     """
     printer.say(f"Previewing changes")
-    printer.sub_info(f"{patch_path}")
+    
     try:
         with open(patch_path, 'r', encoding='utf-8') as f:
             data = json.load(f)
@@ -29,14 +29,14 @@ def preview(patch_path: str) -> str:
         return False # Cannot preview, so cannot apply
 
     explanation = data.get('explanation', 'No explanation provided.')
-    printer.panel(explanation, title="Explanation")
+    printer.panel(explanation, title=f"{patch_path}")
 
     changes = data.get('changes', [])
     if not changes:
         printer.info("No changes proposed.")
         return 'skip' # No changes, so nothing to apply
 
-    printer.header("Summary of Proposed Changes")
+    printer.info("Summary of Proposed Changes")
     
     # Stores (display_index, original_change_index) for interactive selection
     selectable_changes_map = {} 
@@ -51,7 +51,7 @@ def preview(patch_path: str) -> str:
         grouped_file_changes[file].append((i, change)) # Store original index and change data
 
     for file_path, file_change_list in grouped_file_changes.items():
-        printer.sub_info(f"📄 {file_path}")
+        print(f"📄 {file_path}")
         for original_idx, change in file_change_list:
             search_block = change.get('search', '')
             replace_block = change.get('replace', '')
@@ -167,9 +167,30 @@ def _preflight_check(changes) -> bool:
     printer.sub_info("Pre-flight checks passed.")
     return True
 
+
+if __name__ == '__main__':
+    import sys
+    if len(sys.argv) < 3:
+        printer.error("Usage: python -m tools.patch <preview|apply> <patch_file.json>")
+        sys.exit(1)
+
+    command = sys.argv[1]
+    patch_path = sys.argv[2]
+    
+    if command == 'preview':
+        preview(patch_path)
+    elif command == 'apply':
+        if apply(patch_path):
+            printer.info("Patch applied successfully.")
+        else:
+            printer.error("Failed to apply patch.")
+    else:
+        printer.error(f"Unknown command: {command}")
+        sys.exit(1)
+
 def apply(patch_path: str) -> bool:
     """Applies the changes from the patch file."""
-    printer.say(f" 🔨 Applying changes ")
+    printer.say(f"Applying changes  🔨 ")
     printer.sub_info(f"      from {patch_path}")
     try:
         with open(patch_path, 'r', encoding='utf-8') as f:

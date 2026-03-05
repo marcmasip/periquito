@@ -5,7 +5,7 @@ agent.py  —  Dev agent with optimized context.
 Usage:
     python agent.py
     python agent.py "Add dark mode support"          # non-interactive
-    python -m tools.patch preview .agent/patch.json  # standalone patch preview
+    python agent.py patch preview .agent/patch.json  # standalone patch preview
 """
 
 import json, os, re, sys, io, time, subprocess
@@ -395,6 +395,23 @@ def _present_initial_context():
         p.panel('\n'.join(f"  - {f}" for f in folders), border_color=p.Ansi.DARK_GRAY)
 
 def main():
+    if len(sys.argv) > 2 and sys.argv[1] == 'patch':
+        subcommand = sys.argv[2]
+        if subcommand not in ['preview', 'apply'] or len(sys.argv) < 4:
+            p.error("Usage: python agent.py patch <preview|apply> <patch_file.json>")
+            return
+        
+        patch_path = sys.argv[3]
+
+        if subcommand == 'preview':
+            preview(patch_path)
+        elif subcommand == 'apply':
+            if apply(patch_path):
+                p.info("Patch applied successfully.")
+            else:
+                p.error("Failed to apply patch.")
+        return
+
     os.makedirs(AGENT_DIR, exist_ok=True)
     p.wisp("🥚 Periquito, your small but mighty coding assistant! (type exit/quit to stop)")
     p.say("¡Chirp! What can I code for you today?")
