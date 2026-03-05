@@ -31,7 +31,7 @@ def read_protocol() -> str:
             protocol_content = match.group(1).strip()
 
     if protocol_content:
-        return f"The following is a summary of the project structure to guide folder exploration:\n\n---\n{protocol_content}\n---"
+        return f"{protocol_content}"
     
     # Fallback to root directory listing
     spec = get_gitignore_spec()
@@ -46,6 +46,17 @@ def read_protocol() -> str:
     
     summary = "\n".join(lines)
     return f"No 'Project Structure' section found in README. Using a file listing summary to guide folder exploration:\n\n---\n{summary}\n---"
+
+def parse_folders_from_protocol(protocol_content: str) -> list[str]:
+    """Extracts folder paths (ending with '/') from the protocol text."""
+    # This regex finds path-like strings that end with a slash.
+    folders = re.findall(r'([a-zA-Z0-9_./-]+/)', protocol_content)
+    
+    # Filter for actual, existing directories and remove duplicates
+    unique_folders = sorted(list(set(
+        f for f in folders if os.path.isdir(os.path.normpath(f))
+    )))
+    return unique_folders
 
 def get_gitignore_spec() -> pathspec.PathSpec:
     patterns = []
