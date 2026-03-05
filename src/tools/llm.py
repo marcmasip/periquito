@@ -55,7 +55,10 @@ def generate_json(prompt: str, pydantic_model: type[BaseModel], tracer: dict = N
     try:
         # 3. Llamada mediante client.models
         stop_event = threading.Event()
-        progress_thread = threading.Thread(target=printer.progress_bar_runner, args=(stop_event,))
+        progress_thread = threading.Thread(
+            target=printer.progress_bar_runner, 
+            args=(stop_event, model_name, len(prompt))
+        )
         progress_thread.start()
 
         try:

@@ -61,7 +61,7 @@ def ask(prompt: str) -> str:
     """Prints a prompt for user input and returns the response."""
     return input(f"👉 {Ansi.CYAN}{prompt}{Ansi.RESET}").strip()
 
-def progress_bar_runner(stop_event: Event, width: int = 40, duration: int = 60):
+def progress_bar_runner(stop_event: Event, model_name: str = "...", prompt_len: int = 0, width: int = 40, duration: int = 60):
     """
     Displays and updates a progress bar that loops.
     To be run in a separate thread.
@@ -79,13 +79,20 @@ def progress_bar_runner(stop_event: Event, width: int = 40, duration: int = 60):
         spinner = spinners[i % len(spinners)]
         i += 1
         
-        sys.stdout.write(f"\r  > Pensando... {spinner} [{bar}]")
+        # Format prompt length to be more readable
+        if prompt_len > 1000:
+            prompt_len_str = f"{prompt_len/1000:.1f}k"
+        else:
+            prompt_len_str = str(prompt_len)
+
+        info_text = f"{Ansi.DARK_GRAY}({model_name}, {prompt_len_str} chars){Ansi.RESET}"
+        sys.stdout.write(f"\r  > Pensando... {info_text} {spinner} [{bar}]")
         sys.stdout.flush()
         
         time.sleep(0.1)
     
     # Clear the progress bar line
-    sys.stdout.write('\r' + ' ' * (width + 20) + '\r')
+    sys.stdout.write('\r' + ' ' * (width + 80) + '\r')
     sys.stdout.flush()
 
 def panel(content: str, title: str = "", border_color: str = Ansi.BRIGHT_BLACK, **kwargs):
