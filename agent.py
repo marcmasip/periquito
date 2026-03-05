@@ -79,13 +79,33 @@ def _gather_context(request: str, history: str, metrics: dict) -> tuple[list[str
     
     if folders is None: # Fallback for large projects or if protocol has no folders
         p.say("Scanning the directory nest...")
-        folders = phases.explore_folders(request, protocol, history, tracer=metrics)
+        explored_folders = phases.explore_folders(request, protocol, history, tracer=metrics)
+        folders = []
+        for f in explored_folders:
+            f_clean = os.path.normpath(f)
+            if all_protocol_folders:
+                if f_clean == '.' and '.' not in all_protocol_folders:
+                    continue
+                if f_clean in all_protocol_folders or any(f_clean.startswith(p.rstrip('/\\') + os.sep) for p in all_protocol_folders) or '.' in all_protocol_folders:
+                    if f_clean not in folders:
+                        folders.append(f_clean)
+            else:
+                if f_clean != '.':
+                    if f_clean not in folders:
+                        folders.append(f_clean)
     
     p.sub_info(f"Selected: {', '.join(folders) if folders else 'none'}")
 
     p.sub_info("Building file tree...")
     if file_tree is None:
         file_tree = fs.build_tree(folders)
+        
+    tree_lines = len(file_tree.splitlines())
+    if tree_lines > 200:
+        p.warning(f"The file tree has {tree_lines} lines/files. This is a large list.")
+        if p.ask("Do you want to proceed exploring this amount of files? (Y/n): ").lower() not in ('', 'y', 'yes'):
+            return None, None
+
     p.panel(file_tree)
 
     p.say("Picking the most interesting files...")
