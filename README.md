@@ -1,55 +1,57 @@
-# 🐦 Periquito
+# Periquito Agent
 
-_Your small but mighty (pequeño pero matón) coding assistant!_
+A minimalist, command-line AI coding agent. It analyzes a codebase, understands requests, and generates reviewable code patches.
 
-Periquito is a lightweight, command-line AI coding agent designed to help you with your development tasks. It analyzes your codebase, understands your requests in natural language, and generates code patches that you can review and apply.
+## Usage
 
-## ✨ Features
-
-- **Optimized Context:** Intelligently selects relevant files and folders to provide the LLM with the right context, saving tokens and improving accuracy.
-- **Interactive Workflow:** Preview generated changes before applying them. You can apply, skip, or provide feedback for another attempt.
-- **Git Integration:** Automatically commits applied changes with a conventional commit message.
-- **Multi-phase Tasks:** Can chain requests together for more complex tasks.
-- **Detailed Logging:** Saves logs, metrics, and generated patches in the `.agent` directory for full transparency.
-- **Interactive & Non-interactive modes:** Run it in a conversational loop or as a single-shot command.
-
-## 🚀 Usage
-
-### Interactive Mode
-
-To start a conversation with Periquito, simply run:
+**Interactive Mode:**
 ```bash
-python agent.py
-```
-Then, type your request at the prompt.
-
-### Non-interactive (Single-shot) Mode
-
-For quick tasks, you can pass the request directly as an argument:
-```bash
-python agent.py "Your coding request here"
+python src/agent.py
 ```
 
-### Standalone Patch Preview
-
-If you want to review a patch later, you can use the patch tool:
+**Non-interactive Mode:**
 ```bash
-python -m tools.patch preview .agent/patch.json
+python src/agent.py "Your coding request here"
 ```
 
-## ⚙️ How It Works
+## How It Works
 
-1.  **Context Gathering:** Periquito scans your project structure (guided by a `.protocol` file if available) and the user request to identify the most relevant files.
-2.  **Solving:** It builds a context prompt with the selected file contents and sends it to the language model to generate a solution in the form of a JSON patch.
-3.  **User Interaction:** The proposed patch is presented to you. You can choose to:
-    - `apply`: Apply the changes to your local files and commit them.
-    - `iterate`: Provide feedback and ask Periquito to try again.
-    - `skip`: Discard the proposed changes.
+The agent's effectiveness relies on understanding the project structure. It uses the `README.md` for a high-level description and a list of key folders to start its analysis.
 
-## 📁 The `.agent` Directory
+For best results, your project `README.md` should contain a concise description and a `## Project Structure` section.
 
-This directory is created automatically to store all artifacts from Periquito's runs:
+**Example:**
+```markdown
+# My Awesome Project
 
-- `*.json`: The generated patch files.
-- `*_metrics.json`: Detailed metrics for each run (timing, token counts, etc.).
-- `*.txt`: Full logs, including the prompts used.
+This project does X by using Y and Z.
+
+## Project Structure
+- `src`: Main application source code.
+- `docs`: Project documentation.
+- `tests`: Unit and integration tests.
+```
+
+The agent uses this context to perform its task:
+1.  **Explore:** Identifies relevant folders based on the request and project structure.
+2.  **Select:** Narrows down to specific files within those folders.
+3.  **Solve:** Reads the files and generates a code patch to fulfill the request.
+4.  **Review:** You can `apply`, `iterate` on, or `skip` the proposed patch.
+
+## Tools
+
+**Patch Preview:**
+To review a previously generated patch:
+```bash
+python src/agent.py patch preview .agent/patch.json
+```
+
+## The `.agent` Directory
+
+This directory stores run artifacts:
+- `*.json`: Generated patch files.
+- `*_metrics.json`: Performance metrics.
+- `*.txt`: Full logs and prompts.
+
+## Project Structure
+- `src`: Core agent logic and tools.
