@@ -93,16 +93,16 @@ def build_tree(paths: list[str]) -> str:
         
         # Navegar y crear la estructura de carpetas necesaria
         for part in parts[:-1]:
-            if part not in current or current[part] is None:
+            if part not in current or not isinstance(current[part], dict):
                 current[part] = {}
             current = current[part]
         
         # Insertar el elemento final
         last_part = parts[-1]
         if is_file:
-            current[last_part] = None # None indica que es un archivo
+            current[last_part] = clean_path # La ruta indica que es un archivo
         else:
-            if last_part not in current or current[last_part] is None:
+            if last_part not in current or not isinstance(current[last_part], dict):
                 current[last_part] = {} # {} indica que es una carpeta
 
     # 2. Recorrer las rutas de entrada y poblar el diccionario
@@ -141,18 +141,37 @@ def build_tree(paths: list[str]) -> str:
         
         for i, key in enumerate(keys):
             is_last = (i == len(keys) - 1)
-            is_dir = node[key] is not None
+            is_dir = isinstance(node[key], dict)
             
             # Caracteres de árbol típicos
             connector = "└── " if is_last else "├── "
-            display_name = f"{key}/" if is_dir else key
             
-            lines.append(f"{prefix}{connector}{display_name}")
-            
-            # Si es carpeta, procesamos sus hijos recursivamente
             if is_dir:
+                display_name = f"{key}/"
+                lines.append(f"{prefix}{connector}{display_name}")
                 extension = "    " if is_last else "│   "
                 lines.extend(render(node[key], prefix + extension))
+            else:
+                file_path = node[key]
+                try:
+                    size_bytes = os.path.getsize(file_path)
+                    size_kb = size_bytes / 1024
+                    size_str = f"{size_kb:.1f}kb"
+                    
+                    if size_kb < 100:
+                        try:
+                            with open(file_path, 'r', encoding='utf-8') as f:
+                                content = f.read()
+                                if '\x00' not in content:
+                                    lines_count = len(content.splitlines())
+                                    size_str += f", {lines_count} lines"
+                        except (UnicodeDecodeError, OSError):
+                            pass
+                except OSError:
+                    size_str = "unknown size"
+                
+                display_name = f"{key} ({size_str})"
+                lines.append(f"{prefix}{connector}{display_name}")
                 
         return lines
 
