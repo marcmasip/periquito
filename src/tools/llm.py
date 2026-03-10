@@ -13,7 +13,7 @@ from . import print as printer
 try:
     # El cliente busca automáticamente GEMINI_API_KEY en las variables de entorno,
     # pero podemos pasarla explícitamente para mantener tu lógica.
-    client = genai.Client(api_key=os.environ["GEMINI_API_KEY"])
+    client = genai.Client(api_key="AIzaSyAUSmRe2wM8k5b9K4zKMRqoYja699I9vU4")
 except KeyError:
     print("🚨 GEMINI_API_KEY environment variable not set.", file=sys.stderr)
     print("Please set it to your Google AI Studio API key.", file=sys.stderr)
