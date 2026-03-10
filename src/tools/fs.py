@@ -134,21 +134,22 @@ def build_tree(paths: list[str]) -> str:
                         add_to_tree(file_path, is_file=True)
 
     # 3. Generar el texto visual del árbol con caracteres especiales
-    def render(node: dict, current_path: str = "") -> list[str]:
+    def render(node: dict, indent_level: int = 0) -> list[str]:
         lines = []
-        # Ordenamos las claves alfabéticamente para un resultado predecible
+        # Ordenamos las claves alfabéticamente
         keys = sorted(node.keys())
+        
+        # Usamos 2 espacios por nivel de indentación
+        indent = "  " * indent_level
         
         for key in keys:
             is_dir = isinstance(node[key], dict)
             
-            # Construimos la ruta en texto plano para que el LLM no pierda el contexto
-            path_so_far = f"{current_path}/{key}" if current_path else key
-            
             if is_dir:
-                # Opcional: imprimir la carpeta en sí (comentado para ahorrar tokens si solo importan archivos)
-                # lines.append(f"- {path_so_far}/")
-                lines.extend(render(node[key], path_so_far))
+                # Las carpetas terminan en /: para indicar que contienen elementos
+                lines.append(f"{indent}{key}/:")
+                # Llamada recursiva aumentando el nivel de indentación
+                lines.extend(render(node[key], indent_level + 1))
             else:
                 file_path = node[key]
                 try:
@@ -168,8 +169,8 @@ def build_tree(paths: list[str]) -> str:
                 except OSError:
                     size_str = "unknown size"
                 
-                # Formato Markdown puro, sin caracteres de árbol
-                lines.append(f"- `{file_path}` ({size_str})")
+                # Los archivos se listan como items de una lista YAML
+                lines.append(f"{indent}- {key} ({size_str})")
                 
         return lines
 
